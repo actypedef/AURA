@@ -53,10 +53,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /root/autodl-tmp/MicroMix/kernels
+CMAKE_SOURCE_DIR = /root/autodl-tmp/AURA/kernels
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /root/autodl-tmp/MicroMix/kernels/build
+CMAKE_BINARY_DIR = /root/autodl-tmp/AURA/kernels/build
 
 # Include any dependencies generated for this target.
 include CMakeFiles/gemm_objs.dir/depend.make
@@ -72,8 +72,8 @@ include CMakeFiles/gemm_objs.dir/flags.make
 CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o: CMakeFiles/gemm_objs.dir/flags.make
 CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o: ../src/nvfp4.cu
 CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o: CMakeFiles/gemm_objs.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/root/autodl-tmp/MicroMix/kernels/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CUDA object CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o"
-	/usr/local/cuda/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o -MF CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o.d -x cu -c /root/autodl-tmp/MicroMix/kernels/src/nvfp4.cu -o CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/root/autodl-tmp/AURA/kernels/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CUDA object CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o"
+	/usr/local/cuda/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o -MF CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o.d -x cu -c /root/autodl-tmp/AURA/kernels/src/nvfp4.cu -o CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o
 
 CMakeFiles/gemm_objs.dir/src/nvfp4.cu.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CUDA source to CMakeFiles/gemm_objs.dir/src/nvfp4.cu.i"
@@ -86,8 +86,8 @@ CMakeFiles/gemm_objs.dir/src/nvfp4.cu.s: cmake_force
 CMakeFiles/gemm_objs.dir/src/reorder.cu.o: CMakeFiles/gemm_objs.dir/flags.make
 CMakeFiles/gemm_objs.dir/src/reorder.cu.o: ../src/reorder.cu
 CMakeFiles/gemm_objs.dir/src/reorder.cu.o: CMakeFiles/gemm_objs.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/root/autodl-tmp/MicroMix/kernels/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CUDA object CMakeFiles/gemm_objs.dir/src/reorder.cu.o"
-	/usr/local/cuda/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/gemm_objs.dir/src/reorder.cu.o -MF CMakeFiles/gemm_objs.dir/src/reorder.cu.o.d -x cu -c /root/autodl-tmp/MicroMix/kernels/src/reorder.cu -o CMakeFiles/gemm_objs.dir/src/reorder.cu.o
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/root/autodl-tmp/AURA/kernels/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CUDA object CMakeFiles/gemm_objs.dir/src/reorder.cu.o"
+	/usr/local/cuda/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/gemm_objs.dir/src/reorder.cu.o -MF CMakeFiles/gemm_objs.dir/src/reorder.cu.o.d -x cu -c /root/autodl-tmp/AURA/kernels/src/reorder.cu -o CMakeFiles/gemm_objs.dir/src/reorder.cu.o
 
 CMakeFiles/gemm_objs.dir/src/reorder.cu.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CUDA source to CMakeFiles/gemm_objs.dir/src/reorder.cu.i"
@@ -111,6 +111,6 @@ CMakeFiles/gemm_objs.dir/clean:
 .PHONY : CMakeFiles/gemm_objs.dir/clean
 
 CMakeFiles/gemm_objs.dir/depend:
-	cd /root/autodl-tmp/MicroMix/kernels/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /root/autodl-tmp/MicroMix/kernels /root/autodl-tmp/MicroMix/kernels /root/autodl-tmp/MicroMix/kernels/build /root/autodl-tmp/MicroMix/kernels/build /root/autodl-tmp/MicroMix/kernels/build/CMakeFiles/gemm_objs.dir/DependInfo.cmake --color=$(COLOR)
+	cd /root/autodl-tmp/AURA/kernels/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /root/autodl-tmp/AURA/kernels /root/autodl-tmp/AURA/kernels /root/autodl-tmp/AURA/kernels/build /root/autodl-tmp/AURA/kernels/build /root/autodl-tmp/AURA/kernels/build/CMakeFiles/gemm_objs.dir/DependInfo.cmake --color=$(COLOR)
 .PHONY : CMakeFiles/gemm_objs.dir/depend
 

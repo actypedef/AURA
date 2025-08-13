@@ -54,10 +54,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /root/autodl-tmp/MicroMix/kernels
+CMAKE_SOURCE_DIR = /root/autodl-tmp/AURA/kernels
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /root/autodl-tmp/MicroMix/kernels/build
+CMAKE_BINARY_DIR = /root/autodl-tmp/AURA/kernels/build
 
 #=============================================================================
 # Directory level rules for the build root directory
@@ -85,14 +85,14 @@ clean: CMakeFiles/agemm.dir/clean
 CMakeFiles/gemm_objs.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/gemm_objs.dir/build.make CMakeFiles/gemm_objs.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/gemm_objs.dir/build.make CMakeFiles/gemm_objs.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/root/autodl-tmp/MicroMix/kernels/build/CMakeFiles --progress-num=5,6 "Built target gemm_objs"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/root/autodl-tmp/AURA/kernels/build/CMakeFiles --progress-num=5,6 "Built target gemm_objs"
 .PHONY : CMakeFiles/gemm_objs.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/gemm_objs.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/MicroMix/kernels/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/AURA/kernels/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/gemm_objs.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/MicroMix/kernels/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/AURA/kernels/build/CMakeFiles 0
 .PHONY : CMakeFiles/gemm_objs.dir/rule
 
 # Convenience name for target.
@@ -111,14 +111,14 @@ CMakeFiles/gemm_objs.dir/clean:
 CMakeFiles/bench_nvfp4.dir/all: CMakeFiles/gemm_objs.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/bench_nvfp4.dir/build.make CMakeFiles/bench_nvfp4.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/bench_nvfp4.dir/build.make CMakeFiles/bench_nvfp4.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/root/autodl-tmp/MicroMix/kernels/build/CMakeFiles --progress-num=3,4 "Built target bench_nvfp4"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/root/autodl-tmp/AURA/kernels/build/CMakeFiles --progress-num=3,4 "Built target bench_nvfp4"
 .PHONY : CMakeFiles/bench_nvfp4.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/bench_nvfp4.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/MicroMix/kernels/build/CMakeFiles 4
+	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/AURA/kernels/build/CMakeFiles 4
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/bench_nvfp4.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/MicroMix/kernels/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/AURA/kernels/build/CMakeFiles 0
 .PHONY : CMakeFiles/bench_nvfp4.dir/rule
 
 # Convenience name for target.
@@ -137,14 +137,14 @@ CMakeFiles/bench_nvfp4.dir/clean:
 CMakeFiles/agemm.dir/all: CMakeFiles/gemm_objs.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/agemm.dir/build.make CMakeFiles/agemm.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/agemm.dir/build.make CMakeFiles/agemm.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/root/autodl-tmp/MicroMix/kernels/build/CMakeFiles --progress-num=1,2 "Built target agemm"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/root/autodl-tmp/AURA/kernels/build/CMakeFiles --progress-num=1,2 "Built target agemm"
 .PHONY : CMakeFiles/agemm.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/agemm.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/MicroMix/kernels/build/CMakeFiles 4
+	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/AURA/kernels/build/CMakeFiles 4
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/agemm.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/MicroMix/kernels/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /root/autodl-tmp/AURA/kernels/build/CMakeFiles 0
 .PHONY : CMakeFiles/agemm.dir/rule
 
 # Convenience name for target.

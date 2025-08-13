@@ -1,4 +1,4 @@
-build/*
+kernels/build/*
 *.pt
 .vscode
 *.log

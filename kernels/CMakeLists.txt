@@ -12,7 +12,7 @@ find_package(pybind11 CONFIG REQUIRED)
 find_library(TORCH_PYTHON_LIBRARY torch_python PATHS /root/miniconda3/envs/micromix/lib/python3.10/site-packages/torch/lib NO_DEFAULT_PATH)
 
 # 设置 CUTLASS 根目录
-set(CUTLASS_ROOT ../cutlass)
+set(CUTLASS_ROOT ../third-party/cutlass)
 
 # 包含 CUTLASS 头文件
 include_directories(./include)

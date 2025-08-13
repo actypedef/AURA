@@ -2,10 +2,13 @@ import sys
 sys.path.append('build/')
 import torch
 import time
+import math
 import agemm  
 
+N, K = 4096, 4096
 test_M_pool = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
-KE = 512
+select_ratio = 0.05
+KE = math.ceil(K * select_ratio / 64) * 64
 
 @torch.no_grad()
 def test_quant(M,N,K):
@@ -39,8 +42,8 @@ def test_quant(M,N,K):
     return elapsed_time_ms / iterations
 
 quant_ms = []
-for m in test_M_pool:
-    elapsed_time_ms = test_quant(m, 4096, 4096)
+for M in test_M_pool:
+    elapsed_time_ms = test_quant(M, N, K)
     quant_ms.append(elapsed_time_ms)
 
 print(quant_ms)

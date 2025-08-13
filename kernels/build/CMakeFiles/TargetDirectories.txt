@@ -1,5 +1,5 @@
-/root/autodl-tmp/MicroMix/kernels/build/CMakeFiles/gemm_objs.dir
-/root/autodl-tmp/MicroMix/kernels/build/CMakeFiles/bench_nvfp4.dir
-/root/autodl-tmp/MicroMix/kernels/build/CMakeFiles/agemm.dir
-/root/autodl-tmp/MicroMix/kernels/build/CMakeFiles/edit_cache.dir
-/root/autodl-tmp/MicroMix/kernels/build/CMakeFiles/rebuild_cache.dir
+/root/autodl-tmp/AURA/kernels/build/CMakeFiles/gemm_objs.dir
+/root/autodl-tmp/AURA/kernels/build/CMakeFiles/bench_nvfp4.dir
+/root/autodl-tmp/AURA/kernels/build/CMakeFiles/agemm.dir
+/root/autodl-tmp/AURA/kernels/build/CMakeFiles/edit_cache.dir
+/root/autodl-tmp/AURA/kernels/build/CMakeFiles/rebuild_cache.dir
