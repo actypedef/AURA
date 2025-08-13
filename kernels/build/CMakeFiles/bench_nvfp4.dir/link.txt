@@ -1,0 +1,1 @@
+/usr/bin/g++ CMakeFiles/bench_nvfp4.dir/benchmark/bench_nvfp4.cu.o CMakeFiles/gemm_objs.dir/src/nvfp4.cu.o CMakeFiles/gemm_objs.dir/src/reorder.cu.o -o bench_nvfp4   -L/site-packages/torch/lib  -lcudadevrt -lcudart_static -lrt -lpthread -ldl  -L"/usr/local/cuda/targets/x86_64-linux/lib/stubs" -L"/usr/local/cuda/targets/x86_64-linux/lib"

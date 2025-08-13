@@ -1,0 +1,15 @@
+build/*
+*.pt
+.vscode
+*.log
+log.txt
+*.so
+*.o
+*.json
+.ipynb_checkpoints
+*.cmake
+CMakeFiles/*
+CMakeCache.txt
+*.egg
+*.in
+Makefile
