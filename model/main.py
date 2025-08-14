@@ -114,11 +114,12 @@ if __name__ == '__main__':
 
 
     print(model)
-  
-    
+    bsz = "auto"
+    if 'mmlu' in args.tasks :
+        bsz = 1
  
     from transformers import AutoTokenizer
-    lm = HFLM(model, batch_size="auto")
+    lm = HFLM(model, batch_size=bsz)
 
     lm.model.eval()
     for param in lm.model.parameters():
@@ -160,7 +161,7 @@ if __name__ == '__main__':
             tasks=task_names,
             num_fewshot=args.lm_eval_num_fewshot,
             limit=None if args.lm_eval_limit == -1 else args.lm_eval_limit,
-            batch_size="auto"
+            batch_size=bsz
         )
 
         table_results = make_table(results)

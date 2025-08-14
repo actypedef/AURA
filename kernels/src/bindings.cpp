@@ -8,13 +8,15 @@
 inline size_t get_sfa_buffer_size_in_bytes(int num_rows, int K_dim) {
     auto layout = filter_zeros(nvfp4::get_layoutSFA(num_rows, K_dim));
     size_t num_elements = cute::size(layout);
-    return num_elements * sizeof(cutlass::float_ue4m3_t);
+    // return num_elements * sizeof(cutlass::float_ue4m3_t);
+    return (num_rows / 128 + 1) * 128 * K_dim / 16;
 }
 
 inline size_t get_sfb_buffer_size_in_bytes(int num_rows, int K_dim) {
     auto layout = filter_zeros(nvfp4::get_layoutSFB(num_rows, K_dim));
     size_t num_elements = cute::size(layout);
-    return num_elements * sizeof(cutlass::float_ue4m3_t);
+    // return num_elements * sizeof(cutlass::float_ue4m3_t);
+    return (num_rows / 128 + 1) * 128 * K_dim / 16;
 }
 
 
