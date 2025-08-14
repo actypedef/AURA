@@ -5,19 +5,19 @@ MODEL=${1}
 dir=$(pwd)
 export CUDA_VISIBLE_DEVICE="0"
 
-# # zero-shot
-# python ${dir}/model/main.py ${MODEL} \
-#         --act_sort_metric frobenius\
-#         --tasks piqa,arc_challenge,boolq,winogrande,lambada_openai \
-#         --lm_eval_num_fewshot 0 \
-#         --lm_eval_limit -1\
+# zero-shot
+python ${dir}/model/main.py ${MODEL} \
+        --act_sort_metric frobenius\
+        --tasks piqa,arc_challenge,boolq,winogrande,lambada_openai \
+        --lm_eval_num_fewshot 0 \
+        --lm_eval_limit -1\
 
 
-# # # wikitext2 ppl
-# python ${dir}/model/main.py ${MODEL}\
-#         --act_sort_metric frobenius\
-#         --lm_eval_limit -1\
-#         --eval_ppl\
+# # wikitext2 ppl
+python ${dir}/model/main.py ${MODEL}\
+        --act_sort_metric frobenius\
+        --lm_eval_limit -1\
+        --eval_ppl\
 
 
 #5-shot mmlu

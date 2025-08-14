@@ -95,7 +95,8 @@ def get_act_stats(model, dataloader, device_, metric='mean', seqlen=2048):
         if isinstance(y, tuple):
             y = y[0]
             assert isinstance(y, torch.Tensor)
-        stat_tensor(name + ".input", x, weight=m.weight.data)
+        # stat_tensor(name + ".input", x, weight=m.weight.data)
+        stat_tensor(name + ".input", x)
         stat_tensor(name + ".output", y)
 
     hooks = []
@@ -271,7 +272,7 @@ def search_select_proportions(model, dataloader, device_, seqlen, reorder_index,
             keys = keys.reshape(-1, keys.shape[-1]).contiguous()
             seqlen, in_features = keys.shape 
      
-            select_ratio = 0.4
+            select_ratio = 0.1
             select_num = math.ceil(in_features * select_ratio / 64) * 64
             average_bits[name] = 9 * select_ratio + 4.5 * (1.0 - select_ratio)
             

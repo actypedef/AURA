@@ -401,3 +401,13 @@ template void run_reorder_w_bf16_nvfp4<16, 14336>(
   bf16_t*, int, int16_t*, uint8_t*,
   sf_t*, int, int
 );
+
+template void run_reorder_x_bf16_nvfp4<16, 11008>(
+  bf16_t*, int, int16_t*, uint8_t*,
+  sf_t*, int, int
+);
+
+template void run_reorder_w_bf16_nvfp4<16, 11008>(
+  bf16_t*, int, int16_t*, uint8_t*,
+  sf_t*, int, int
+);

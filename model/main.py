@@ -115,8 +115,9 @@ if __name__ == '__main__':
 
     print(model)
     bsz = "auto"
-    if 'mmlu' in args.tasks :
-        bsz = 1
+    if args.tasks is not None:
+        if 'mmlu' in args.tasks :
+            bsz = 1
  
     from transformers import AutoTokenizer
     lm = HFLM(model, batch_size=bsz)

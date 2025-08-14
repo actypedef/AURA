@@ -67,6 +67,13 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_x(
             KQ, KE
         );
     }
+    else if (KQ == 11008) {
+        run_reorder_x_bf16_nvfp4<16, 11008>(
+            (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), M, reorder_index.data_ptr<int16_t>(), 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
     else {
         std::cerr << "K value is not valid !" << std::endl;
         throw std::runtime_error(std::string("Value error in run_reorder_x_bf16_nvfp4 "));
@@ -94,6 +101,13 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_w(
     }
     else if (KQ == 14336) {
         run_reorder_w_bf16_nvfp4<16, 14336>(
+            (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), N, reorder_index.data_ptr<int16_t>(), 
+            QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 11008) {
+        run_reorder_w_bf16_nvfp4<16, 11008>(
             (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), N, reorder_index.data_ptr<int16_t>(), 
             QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
             KQ, KE
