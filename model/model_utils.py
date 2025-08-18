@@ -44,7 +44,7 @@ def reorder_model_llama(model, device, kv_cache, reorder_index, select_nums):
         torch.cuda.empty_cache()
     return model
 
-def reorder_model_qwen(model, device, kv_cache, reorder_index, p6_nums, p8_nums):
+def reorder_model_qwen(model, device, kv_cache, reorder_index, select_nums):
     model.config.use_cache = False
     layers = model.model.layers
     assert reorder_index is not None, "Reorder index is None"
@@ -55,8 +55,7 @@ def reorder_model_qwen(model, device, kv_cache, reorder_index, p6_nums, p8_nums)
             m = QQwen2DecoderLayer(
                 originalLayer=layers[i],
                 kv_cache=kv_cache,
-                p8_nums=p8_nums,
-                p6_nums=p6_nums,
+                select_nums=select_nums,
                 reorder_index=reorder_index,
                 layer_idx=i
             )

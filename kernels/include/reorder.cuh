@@ -141,3 +141,21 @@ void run_reorder_w_bf16_nvfp4(
   sf_t *q_scale,
   int KQ, int KE
 );
+template<int group_size, int hidden_dim>
+void run_reorder32_x_bf16_nvfp4(
+  bf16_t *hidden_states,
+  int seq_len,
+  int16_t *reorder_index,
+  uint8_t *q_out,
+  sf_t *q_scale,
+  int KQ, int KE
+);
+template<int group_size, int hidden_dim>
+void run_reorder32_w_bf16_nvfp4(
+  bf16_t *hidden_states,
+  int out_features,
+  int16_t *reorder_index,
+  uint8_t *q_out,
+  sf_t *q_scale,
+  int KQ, int KE
+);

@@ -53,7 +53,7 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_x(
     int K = KQ + KE;
     auto QX = torch::empty({M, K / 2}, torch::dtype(torch::kUInt8).device(X.device()));
     auto SFX = torch::empty({(int)get_sfa_buffer_size_in_bytes(M, K)}, torch::dtype(torch::kUInt8).device(X.device()));
-    if (KQ == 4096) {
+    if (KQ == 4096) { // Llama
         run_reorder_x_bf16_nvfp4<16, 4096>(
             (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), M, reorder_index.data_ptr<int16_t>(), 
             QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
@@ -69,6 +69,34 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_x(
     }
     else if (KQ == 11008) {
         run_reorder_x_bf16_nvfp4<16, 11008>(
+            (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), M, reorder_index.data_ptr<int16_t>(), 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 5120) { // Qwen
+        run_reorder_x_bf16_nvfp4<16, 5120>(
+            (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), M, reorder_index.data_ptr<int16_t>(), 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 13824) {
+        run_reorder_x_bf16_nvfp4<16, 13824>(
+            (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), M, reorder_index.data_ptr<int16_t>(), 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 3584) { // Qwen
+        run_reorder32_x_bf16_nvfp4<32, 3584>(
+            (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), M, reorder_index.data_ptr<int16_t>(), 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 18944) {
+        run_reorder32_x_bf16_nvfp4<32, 18944>(
             (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), M, reorder_index.data_ptr<int16_t>(), 
             QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
             KQ, KE
@@ -92,7 +120,7 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_w(
     int K = KQ + KE;
     auto QW = torch::empty({N, K / 2}, torch::dtype(torch::kUInt8).device(W.device()));
     auto SFW = torch::empty({(int)get_sfb_buffer_size_in_bytes(N, K)}, torch::dtype(torch::kUInt8).device(W.device()));
-    if (KQ == 4096) {
+    if (KQ == 4096) { //Llama
         run_reorder_w_bf16_nvfp4<16, 4096>(
             (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), N, reorder_index.data_ptr<int16_t>(), 
             QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
@@ -108,6 +136,34 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_w(
     }
     else if (KQ == 11008) {
         run_reorder_w_bf16_nvfp4<16, 11008>(
+            (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), N, reorder_index.data_ptr<int16_t>(), 
+            QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 5120) { //Qwen
+        run_reorder_w_bf16_nvfp4<16, 5120>(
+            (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), N, reorder_index.data_ptr<int16_t>(), 
+            QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 13824) {
+        run_reorder_w_bf16_nvfp4<16, 13824>(
+            (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), N, reorder_index.data_ptr<int16_t>(), 
+            QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 3584) { //Qwen
+        run_reorder32_w_bf16_nvfp4<32, 3584>(
+            (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), N, reorder_index.data_ptr<int16_t>(), 
+            QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 18944) {
+        run_reorder32_w_bf16_nvfp4<32, 18944>(
             (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), N, reorder_index.data_ptr<int16_t>(), 
             QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
             KQ, KE

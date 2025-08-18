@@ -3,9 +3,8 @@ from torch import nn
 from typing import List, Optional, Tuple
 import math
 from transformers.models.qwen2.modeling_qwen2 import Qwen2DecoderLayer, Qwen2RMSNorm, Qwen2Attention, Qwen2MLP
-
 from qLinearLayer import QLinearLayer
-
+from quantize import *
 import sys
 sys.path.append('kernels/build/')
 import agemm 
@@ -89,8 +88,7 @@ class QQwen2DecoderLayer(nn.Module):
         self,
         originalLayer: Qwen2DecoderLayer,
         kv_cache,
-        p8_nums,
-        p6_nums,
+        select_nums,
         reorder_index,
         layer_idx
     ):
@@ -99,16 +97,14 @@ class QQwen2DecoderLayer(nn.Module):
         self.self_attn = QQwen2Attention(
             originalLayer.self_attn,
             kv_cache,
-            p8_nums=p8_nums,
-            p6_nums=p6_nums,
+            select_nums=select_nums,
             reorder_index=reorder_index,
             i=layer_idx
         )
         # self.self_attn = originalLayer.self_attn
         self.mlp = QQwen2MLP(
             originalLayer.mlp,
-            p8_nums=p8_nums,
-            p6_nums=p6_nums,
+            select_nums=select_nums,
             reorder_index=reorder_index,
             i=layer_idx
         )
@@ -181,8 +177,7 @@ class QQwen2Attention(nn.Module):
         self, 
         originalAttn: Qwen2Attention,
         kv_cache,
-        p8_nums,
-        p6_nums,
+        select_nums,
         reorder_index,
         i
     ):
@@ -207,26 +202,22 @@ class QQwen2Attention(nn.Module):
         nameTemplate = 'layers.{}.{}.{}.{}'
         self.q_proj = QLinearLayer(
             originalAttn.q_proj,
-            p8_num=p8_nums[nameTemplate.format(i, 'self_attn', 'q_proj', 'input')],
-            p6_num=p6_nums[nameTemplate.format(i, 'self_attn', 'q_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'q_proj', 'input')],
             reorder_index=reorder_index[nameTemplate.format(i, 'self_attn', 'q_proj', 'input')]
         )
         self.k_proj = QLinearLayer(
             originalAttn.k_proj,
-            p8_num=p8_nums[nameTemplate.format(i, 'self_attn', 'k_proj', 'input')],
-            p6_num=p6_nums[nameTemplate.format(i, 'self_attn', 'k_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'k_proj', 'input')],
             reorder_index=reorder_index[nameTemplate.format(i, 'self_attn', 'k_proj', 'input')]
         )
         self.v_proj = QLinearLayer(
             originalAttn.v_proj,
-            p8_num=p8_nums[nameTemplate.format(i, 'self_attn', 'v_proj', 'input')],
-            p6_num=p6_nums[nameTemplate.format(i, 'self_attn', 'v_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'v_proj', 'input')],
             reorder_index=reorder_index[nameTemplate.format(i, 'self_attn', 'v_proj', 'input')]
         )
         self.o_proj = QLinearLayer(
             originalAttn.o_proj,
-            p8_num=p8_nums[nameTemplate.format(i, 'self_attn', 'o_proj', 'input')],
-            p6_num=p6_nums[nameTemplate.format(i, 'self_attn', 'o_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'o_proj', 'input')],
             reorder_index=reorder_index[nameTemplate.format(i, 'self_attn', 'o_proj', 'input')]
         )
         self.rotary_emb = originalAttn.rotary_emb
@@ -259,10 +250,10 @@ class QQwen2Attention(nn.Module):
         bsz, q_len, _ = hidden_states.size()
 
         hidden_states = hidden_states.reshape(bsz*q_len, -1).contiguous().detach()
-        AN, AS, AO, SFAN, SFAS, SFAO = mixedgemm.reorder_quantize_x(hidden_states, self.q_reorder_index, self.q_proj.p4_num, self.q_proj.p6_num, self.q_proj.p8_num)
+        qx, scale_x = agemm.reorder_quantize_x(hidden_states, self.q_reorder_index, self.q_proj.select_num)
         torch.cuda.synchronize()
         
-        hidden_states = (AN, AS, AO, SFAN, SFAS, SFAO, bsz, q_len)
+        hidden_states = (qx, scale_x, bsz, q_len)
         query_states = self.q_proj(hidden_states).view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
         key_states = self.k_proj(hidden_states).view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
         value_states = self.v_proj(hidden_states).view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
@@ -326,9 +317,9 @@ class QQwen2Attention(nn.Module):
        
         attn_output = attn_output.reshape(bsz*q_len, -1).contiguous().detach()
 
-        AN, AS, AO, SFAN, SFAS, SFAO = mixedgemm.reorder_quantize_x(attn_output, self.o_reorder_index, self.o_proj.p4_num, self.o_proj.p6_num, self.o_proj.p8_num)
+        qx, scale_x = agemm.reorder_quantize_x(attn_output, self.o_reorder_index, self.o_proj.select_num)
         torch.cuda.synchronize()
-        attn_output = (AN, AS, AO, SFAN, SFAS, SFAO, bsz, q_len)
+        attn_output = (qx, scale_x, bsz, q_len)
         attn_output = self.o_proj(attn_output)
 
         if not output_attentions:
@@ -341,8 +332,7 @@ class QQwen2MLP(nn.Module):
     def __init__(
         self,
         originalMLP: Qwen2MLP,
-        p8_nums,
-        p6_nums,
+        select_nums,
         reorder_index,
         i
     ):
@@ -351,21 +341,20 @@ class QQwen2MLP(nn.Module):
         nameTemplate = 'layers.{}.{}.{}.{}'
         self.gate_proj = QLinearLayer(
             originalMLP.gate_proj,
-            p6_num=p6_nums[nameTemplate.format(i, 'mlp', 'gate_proj', 'input')],
-            p8_num=p8_nums[nameTemplate.format(i, 'mlp', 'gate_proj', 'input')],
-            reorder_index=reorder_index[nameTemplate.format(i, 'mlp', 'gate_proj', 'input')]
+            select_num=select_nums[nameTemplate.format(i, 'mlp', 'gate_proj', 'input')],
+            reorder_index=reorder_index[nameTemplate.format(i, 'mlp', 'gate_proj', 'input')],
+            out_reorder_index=reorder_index[nameTemplate.format(i, 'mlp', 'down_proj', 'input')]
         )
         self.down_proj = QLinearLayer(
             originalMLP.down_proj,
-            p6_num=p6_nums[nameTemplate.format(i, 'mlp', 'down_proj', 'input')],
-            p8_num=p8_nums[nameTemplate.format(i, 'mlp', 'down_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(i, 'mlp', 'down_proj', 'input')],
             reorder_index=reorder_index[nameTemplate.format(i, 'mlp', 'down_proj', 'input')]
         )
         self.up_proj = QLinearLayer(
             originalMLP.up_proj,
-            p6_num=p6_nums[nameTemplate.format(i, 'mlp', 'up_proj', 'input')],
-            p8_num=p8_nums[nameTemplate.format(i, 'mlp', 'up_proj', 'input')],
-            reorder_index=reorder_index[nameTemplate.format(i, 'mlp', 'up_proj', 'input')]
+            select_num=select_nums[nameTemplate.format(i, 'mlp', 'up_proj', 'input')],
+            reorder_index=reorder_index[nameTemplate.format(i, 'mlp', 'up_proj', 'input')],
+            out_reorder_index=reorder_index[nameTemplate.format(i, 'mlp', 'down_proj', 'input')]
         )
         self.act_fn = originalMLP.act_fn
 
@@ -386,19 +375,17 @@ class QQwen2MLP(nn.Module):
         bsz, q_len, _ = x.shape
         x = x.reshape(bsz*q_len, -1).contiguous().detach()
 
-        AN, AS, AO, SFAN, SFAS, SFAO = mixedgemm.reorder_quantize_x(x, self.up_reorder_index, self.up_proj.p4_num, self.up_proj.p6_num, self.up_proj.p8_num)
+        qx, scale_x = agemm.reorder_quantize_x(x, self.up_reorder_index, self.up_proj.select_num)
         torch.cuda.synchronize()
-        x = (AN, AS, AO, SFAN, SFAS, SFAO, bsz, q_len)
+        x = (qx, scale_x, bsz, q_len)
         tmpResult = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
         # Quantize the activations and feed into down_proj
 
         bsz, q_len, _ = tmpResult.shape
         tmpResult = tmpResult.reshape(bsz*q_len, -1).contiguous().detach()
-        if _ > 25000:
-            AN, AS, AO, SFAN, SFAS, SFAO = mixedgemm.downproj_quantize_w(torch.index_select(tmpResult, 1, self.down_reorder_index.to(torch.int32)), self.down_proj.p4_num, self.down_proj.p6_num, self.down_proj.p8_num)
-        else: 
-            AN, AS, AO, SFAN, SFAS, SFAO = mixedgemm.reorder_quantize_x(x, self.down_reorder_index, self.down_proj.p4_num, self.down_proj.p6_num, self.down_proj.p8_num)
-        torch.cuda.synchronize()
-        tmpResult = (AN, AS, AO, SFAN, SFAS, SFAO, bsz, q_len)
+        
+        qx, scale_x = agemm.reorder_quantize_x(tmpResult, self.down_reorder_index, self.down_proj.select_num)
+        
+        tmpResult = (qx, scale_x, bsz, q_len)
        
         return self.down_proj(tmpResult)
