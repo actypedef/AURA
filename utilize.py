@@ -25,6 +25,7 @@ def get_reorder_index(model, act_scales, metric='mean'):
         # _, sorted_index = torch.sort(tensor, descending=True) # For putting outliers at first
 
         return sorted_index
+        # return torch.arange(tensor.shape[0])
         
     for name, m in model.model.named_modules():
         if isinstance(m, nn.Linear):
@@ -71,7 +72,8 @@ def get_act_stats(model, dataloader, device_, metric='mean', seqlen=2048):
             comming_H = tensorH.matmul(tensorH.t())
             comming_scales = torch.diag(comming_H)
         elif metric == 'frobenius':
-            tensorE = tensor - quantize_nvfp4_tensor(tensor, group_size=16)
+            # tensorE = tensor - quantize_nvfp4_tensor(tensor, group_size=16)
+            tensorE = tensor - quantize_mxfp4_tensor(tensor, group_size=32)
             if weight is not None:
                 comming_scales = torch.linalg.norm(tensorE, ord=2, dim=0).float().cpu() * torch.linalg.norm(weight, ord=2, dim=0).float().cpu()
             else:
