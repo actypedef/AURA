@@ -57,7 +57,13 @@ class QLinearLayer(nn.Module):
         # final_scale = scale_x @ self.scale_w.T
         # y = qy * final_scale
         
+        # print(f"x = {qx.shape}")
+        # print(f"w = {self.W.shape}")
+        # print(f"scale_x = {scale_x.shape}")
+        # print(f"scale_w = {self.scale_w.shape}")
+        # assert qx.shape[1] == self.W.shape[1]
         y = agemm.matmul(qx, self.W, scale_x, self.scale_w)
+        torch.cuda.synchronize()
         if self.bias is not None:
             y = y + self.bias
 

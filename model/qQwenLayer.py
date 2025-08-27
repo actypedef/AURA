@@ -9,6 +9,71 @@ import sys
 sys.path.append('kernels/build/')
 import agemm 
 
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from quantize import *
+
+def plot_tensor_distribution(tensor, save_path, threshold1=0, threshold2=0):
+    """
+    绘制并保存一个一维张量的分布图。
+
+    参数:
+    tensor (torch.Tensor): 需要绘制的一维张量。
+    save_path (str): 保存图表的路径。
+    """
+    # 确保张量是一维的
+    if tensor.dim() != 1:
+        raise ValueError("输入的张量必须是一维的。")
+
+    # 将张量的值转移到 CPU 并转换为 NumPy 数组，以便 matplotlib 处理
+    tensor_values = tensor.cpu().numpy()
+    
+    # 创建一个代表 channel 的数组，即 0, 1, 2, ..., 4095
+    channels = range(tensor.size(0))
+
+    # 创建一个新的图表
+    plt.figure(figsize=(6, 6))
+
+     # 1. 找到前10%的阈值
+    # np.percentile(tensor_values, 90) 计算了第90个百分位数，即90%的数值都低于这个值
+    if threshold1 == 0:
+        threshold1 = np.percentile(tensor_values, 90)
+        threshold2 = np.percentile(tensor_values, 99)
+
+    color_low, color_mid, color_high = '#82B366', '#D79B00', '#B85450'
+    colors = [
+        color_high if v >= threshold2 else (color_mid if v >= threshold1 else color_low)
+        for v in tensor_values
+    ]
+    plt.bar(channels, tensor_values, color=colors, width=1.0)
+
+    # 添加标题和坐标轴标签
+    plt.title("Activation Quantization Error", fontsize=18)
+    plt.xlabel("Channel", fontsize=14)
+    plt.ylabel("Error", fontsize=14)
+    plt.ylim((0, 3))
+    plt.tick_params(axis='both', which='major', labelsize=12)
+    patch_high = mpatches.Patch(color=color_high, label=f'99%~100%')
+    patch_mid = mpatches.Patch(color=color_mid, label=f'90%~99%')
+    patch_low = mpatches.Patch(color=color_low, label=f'0%~90%')
+    
+    # 增大图例的字体
+    plt.legend(handles=[patch_high, patch_mid, patch_low], fontsize=12)
+
+    # # 添加网格线
+    # plt.grid(True)
+
+    # 保存图表到指定路径 [1, 2, 3]
+    # 您可以根据需要更改文件名和格式，例如 'tensor_distribution.pdf'
+    plt.savefig(save_path)
+
+    # （可选）如果您想在脚本运行时显示图表，可以取消下面这行代码的注释
+    # plt.show()
+
+    print(f"saved: {save_path}")
+    return threshold1, threshold2
+
+
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
@@ -250,6 +315,7 @@ class QQwen2Attention(nn.Module):
         bsz, q_len, _ = hidden_states.size()
 
         hidden_states = hidden_states.reshape(bsz*q_len, -1).contiguous().detach()
+        # print(self.q_proj.select_num)
         qx, scale_x = agemm.reorder_quantize_x(hidden_states, self.q_reorder_index, self.q_proj.select_num)
         torch.cuda.synchronize()
         
@@ -317,6 +383,20 @@ class QQwen2Attention(nn.Module):
        
         attn_output = attn_output.reshape(bsz*q_len, -1).contiguous().detach()
 
+        ########## bar #########
+        # qX = quantize_nvfp4_tensor(attn_output, group_size=16)
+        # tensorE = attn_output - qX
+        # comming_scales = torch.linalg.norm(tensorE, ord=2, dim=0).float().cpu()
+        # threshold1, threshold2 = plot_tensor_distribution(comming_scales, f"./results/qwen_o_raw.png")
+        # _1, _2 = plot_tensor_distribution(comming_scales[self.o_reorder_index.to(torch.int32).cpu()], f"./results/qwen_o_reordered.png")
+        
+        # qx, scale_x = reorder_quantize_x(attn_output, self.o_reorder_index.to(torch.int32), self.o_proj.select_num)
+
+        # topk_index = self.o_reorder_index[:self.o_proj.select_num].to(torch.int32).cpu()
+        # tensorE[:, topk_index] -= qx[:, -self.o_proj.select_num:]
+        # comming_scales = torch.linalg.norm(tensorE, ord=2, dim=0).float().cpu()
+        # _1, _2 = plot_tensor_distribution(comming_scales[self.o_reorder_index.to(torch.int32).cpu()], f"./results/qwen_o_aug.png", threshold1=threshold1, threshold2=threshold2)
+        # assert 0
         qx, scale_x = agemm.reorder_quantize_x(attn_output, self.o_reorder_index, self.o_proj.select_num)
         torch.cuda.synchronize()
         attn_output = (qx, scale_x, bsz, q_len)

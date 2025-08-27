@@ -16,8 +16,8 @@ from transformers.models.llama.modeling_llama import (ACT2FN,
 import flashinfer
 
 import sys
-sys.path.append('./mgemm/build/')
-import mixedgemm
+sys.path.append('./kernels/build/')
+import agemm
 
 class QLinearLayer(nn.Module):
     __constants__ = ["in_features", "out_features"]
@@ -30,8 +30,7 @@ class QLinearLayer(nn.Module):
         in_features,
         out_features,
         bias,
-        p8_num, 
-        p6_num,
+        select_num, 
         reorder_index=None
     ) -> None:
         factory_kwargs = {"device": 'cuda', "dtype": torch.bfloat16}
@@ -42,23 +41,17 @@ class QLinearLayer(nn.Module):
             self.bias = nn.Parameter(torch.empty(out_features, **factory_kwargs))
         else:
             self.register_parameter("bias", None)
-        self.p6_num = p6_num
-        self.p8_num = p8_num
-        self.p4_num = self.in_features - p8_num - p6_num
+        self.select_num = select_num
     
-        self.BN = torch.zeros(out_features, self.p4_num//2, dtype=torch.uint8, device='cuda')
-        self.BS = torch.zeros(out_features, self.p6_num*6//8, dtype=torch.uint8, device='cuda')
-        self.BO = torch.zeros(out_features, self.p8_num, dtype=torch.uint8, device='cuda')
-        self.SFBN = torch.ones(out_features*self.p4_num//32, dtype=torch.uint8, device='cuda') * 127 
-        self.SFBS = torch.ones(out_features*self.p6_num//32, dtype=torch.uint8, device='cuda') * 127
-        self.SFBO = torch.ones(out_features*self.p8_num//32, dtype=torch.uint8, device='cuda') * 127
+        self.B = torch.zeros(out_features, (self.in_feature+self.select_num)//2, dtype=torch.uint8, device='cuda')
+        self.SFB = torch.ones(out_features*s(self.in_feature+self.select_num)//16, dtype=torch.uint8, device='cuda') * 127 
         self.reorder_index = torch.arange(self.in_features, dtype=torch.int16, device='cuda') 
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
     
         
-        AN, AS, AO, SFAN, SFAS, SFAO = x[:6]
-        y = mixedgemm.matmul(AN, self.BN, AS, self.BS, AO, self.BO, SFAN, self.SFBN, SFAS, self.SFBS, SFAO, self.SFBO)
+        A, SFA = x[:2]
+        y = agemm.matmul(A, self.B, SFA, self.SFB)
         if self.bias is not None:
             y = y + self.bias
         
@@ -86,8 +79,7 @@ class QLlamaMLP(nn.Module):
     def __init__(
         self,
         config,
-        p8_nums,
-        p6_nums,
+        select_nums,
         i,
         reorder_index=None,
     ):
@@ -100,26 +92,22 @@ class QLlamaMLP(nn.Module):
         
         self.gate_proj = QLinearLayer(
             in_features=self.hidden_size, out_features=self.intermediate_size, bias=config.mlp_bias,
-            p6_num=p6_nums[nameTemplate.format(i, 'mlp', 'gate_proj', 'input')],
-            p8_num=p8_nums[nameTemplate.format(i, 'mlp', 'gate_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(i, 'mlp', 'gate_proj', 'input')],
         )
         self.down_proj = QLinearLayer(
             in_features=self.intermediate_size, out_features=self.hidden_size, bias=config.mlp_bias,
-            p6_num=p6_nums[nameTemplate.format(i, 'mlp', 'down_proj', 'input')],
-            p8_num=p8_nums[nameTemplate.format(i, 'mlp', 'down_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(i, 'mlp', 'down_proj', 'input')],
         )
         self.up_proj = QLinearLayer(
             in_features=self.hidden_size, out_features=self.intermediate_size, bias=config.mlp_bias,
-            p6_num=p6_nums[nameTemplate.format(i, 'mlp', 'up_proj', 'input')],
-            p8_num=p8_nums[nameTemplate.format(i, 'mlp', 'up_proj', 'input')],
-            
+            select_num=select_nums[nameTemplate.format(i, 'mlp', 'up_proj', 'input')],
         )
         self.act_fn = torch.nn.functional.silu
 
     def forward(self, x):   
         bsz, q_len = x[-2], x[-1]
-        # return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
-        return self.down_proj(mixedgemm.activate_quantize_x(self.gate_proj(x), self.up_proj(x), self.down_proj.p4_num, self.down_proj.p6_num, self.down_proj.p8_num)).reshape(bsz, q_len, -1)
+        return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
+        # return self.down_proj(mixedgemm.activate_quantize_x(self.gate_proj(x), self.up_proj(x), self.down_proj.p4_num, self.down_proj.select_num, self.down_proj.p8_num)).reshape(bsz, q_len, -1)
 
 
     
@@ -129,8 +117,7 @@ class QLlamaAttention(nn.Module):
     def __init__(
         self, 
         config,
-        p8_nums,
-        p6_nums,
+        select_nums,
         i,
         reorder_index=None,
     ):
@@ -149,23 +136,19 @@ class QLlamaAttention(nn.Module):
         nameTemplate = 'layers.{}.{}.{}.{}'
         self.q_proj = QLinearLayer(
             in_features=self.hidden_size, out_features=self.hidden_size, bias=config.attention_bias,
-            p8_num=p8_nums[nameTemplate.format(i, 'self_attn', 'q_proj', 'input')],
-            p6_num=p6_nums[nameTemplate.format(i, 'self_attn', 'q_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'q_proj', 'input')],
         )
         self.k_proj = QLinearLayer(
             in_features=self.hidden_size, out_features=self.hidden_size, bias=config.attention_bias,
-            p8_num=p8_nums[nameTemplate.format(i, 'self_attn', 'k_proj', 'input')],
-            p6_num=p6_nums[nameTemplate.format(i, 'self_attn', 'k_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'k_proj', 'input')],
         )
         self.v_proj = QLinearLayer(
             in_features=self.hidden_size, out_features=self.hidden_size, bias=config.attention_bias,
-            p8_num=p8_nums[nameTemplate.format(i, 'self_attn', 'v_proj', 'input')],
-            p6_num=p6_nums[nameTemplate.format(i, 'self_attn', 'v_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'v_proj', 'input')],
         )
         self.o_proj = QLinearLayer(
             in_features=self.hidden_size, out_features=self.hidden_size, bias=config.attention_bias,
-            p8_num=p8_nums[nameTemplate.format(i, 'self_attn', 'o_proj', 'input')],
-            p6_num=p6_nums[nameTemplate.format(i, 'self_attn', 'o_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'o_proj', 'input')],
         )
         self.page_len = 128
         
@@ -216,8 +199,8 @@ class QLlamaAttention(nn.Module):
         # output projection
         torch.cuda.nvtx.range_push("qkvo")
         # (AN, AS, AO, SFAN, SFAS, SFAO)
-        AN, AS, AO, SFAN, SFAS, SFAO = mixedgemm.reorder_quantize_x(attn_output, self.o_proj.reorder_index, self.o_proj.p4_num, self.o_proj.p6_num, self.o_proj.p8_num)
-        attn_output = self.o_proj((AN, AS, AO, SFAN, SFAS, SFAO, bsz, q_len)).reshape(bsz, q_len, -1)
+        A, SFA = agemm.reorder_quantize_x(attn_output, self.o_proj.reorder_index, self.o_proj.select_num)
+        attn_output = self.o_proj((A, SFA, bsz, q_len)).reshape(bsz, q_len, -1)
         torch.cuda.nvtx.range_pop()
     
         return attn_output, past_key_value
@@ -226,23 +209,20 @@ class QLlamaAttention(nn.Module):
 class LlamaRMSNorm(nn.Module):
     def __init__(
         self,
-        hidden_size, eps, p8_num, p6_num, reorder_index=None
+        hidden_size, eps, p8_num, select_num, reorder_index=None
     ):
         super().__init__()
         self.weight = nn.Parameter(torch.zeros(hidden_size, dtype=torch.bfloat16))
         self.variance_epsilon = eps
-        self.p6_num = p6_num
-        self.p8_num = p8_num
-        
-        self.p4_num = len(self.weight) - p8_num - p6_num
+        self.select_num = select_num
         self.reorder_index = torch.arange(len(self.weight), dtype=torch.int16, device='cuda') 
 
     def forward(self, hidden_states):
         bsz, q_len, _ = hidden_states.shape
         hidden_states = hidden_states.reshape(bsz*q_len, -1).contiguous()
-        # print(self.p4_num, self.p6_num, self.p8_num)
-        AN, AS, AO, SFAN, SFAS, SFAO = mixedgemm.rmsnorm_quantize_x(hidden_states, self.weight, self.variance_epsilon, self.reorder_index, self.p4_num, self.p6_num, self.p8_num)
-        return (AN, AS, AO, SFAN, SFAS, SFAO, bsz, q_len)
+        # print(self.p4_num, self.select_num, self.p8_num)
+        A, SFA = agemm.rmsnorm_quantize_x(hidden_states, self.weight, self.variance_epsilon, self.reorder_index, self.p4_num, self.select_num, self.p8_num)
+        return (A, SFA, bsz, q_len)
         # return rms_norm(hidden_states, self.weight, self.variance_epsilon)
     
 class FP16LlamaRMSNorm(nn.Module):
@@ -265,7 +245,7 @@ class LlamaDecoderLayer(nn.Module):
         self,
         config,
         p8_nums,
-        p6_nums,
+        select_nums,
         layer_idx,
         reorder_index=None,
     ):
@@ -276,7 +256,7 @@ class LlamaDecoderLayer(nn.Module):
         self.self_attn = QLlamaAttention(
             config,
             p8_nums=p8_nums,
-            p6_nums=p6_nums,
+            select_nums=select_nums,
             reorder_index=reorder_index,
             i=layer_idx
         )
@@ -284,17 +264,17 @@ class LlamaDecoderLayer(nn.Module):
         self.mlp = QLlamaMLP(
             config,
             p8_nums=p8_nums,
-            p6_nums=p6_nums,
+            select_nums=select_nums,
             reorder_index=reorder_index,
             i=layer_idx
         )
         self.input_layernorm = LlamaRMSNorm(
             config.hidden_size, eps=config.rms_norm_eps, p8_num=p8_nums[nameTemplate.format(layer_idx, 'self_attn', 'q_proj', 'input')],
-            p6_num=p6_nums[nameTemplate.format(layer_idx, 'self_attn', 'q_proj', 'input')], 
+            select_num=select_nums[nameTemplate.format(layer_idx, 'self_attn', 'q_proj', 'input')], 
         )
         self.post_attention_layernorm = LlamaRMSNorm(
             config.hidden_size, eps=config.rms_norm_eps, p8_num=p8_nums[nameTemplate.format(layer_idx, 'mlp', 'gate_proj', 'input')],
-            p6_num=p6_nums[nameTemplate.format(layer_idx, 'mlp', 'gate_proj', 'input')],
+            select_num=select_nums[nameTemplate.format(layer_idx, 'mlp', 'gate_proj', 'input')],
         )
 
     def forward(
@@ -363,16 +343,16 @@ class LlamaModel(LlamaPreTrainedModel):
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size,
                                          self.padding_idx)
     
-        p6_num_filename = f'./saved/{name}_p6_num_wikitext2_mean.pt'
+        select_num_filename = f'./saved/{name}_select_num_wikitext2_mean.pt'
         p8_num_filename = f'./saved/{name}_p8_num_wikitext2_mean.pt'
-        p6_nums = torch.load(p6_num_filename, weights_only=False)
+        select_nums = torch.load(select_num_filename, weights_only=False)
         p8_nums = torch.load(p8_num_filename, weights_only=False)
         if layer_idx is not None:
             self.layers = nn.ModuleList(
-        [LlamaDecoderLayer(config, p8_nums, p6_nums, layer_idx)])
+        [LlamaDecoderLayer(config, p8_nums, select_nums, layer_idx)])
         else:
             self.layers = nn.ModuleList(
-                [LlamaDecoderLayer(config, p8_nums, p6_nums, i) for i in range(config.num_hidden_layers)],)
+                [LlamaDecoderLayer(config, p8_nums, select_nums, i) for i in range(config.num_hidden_layers)],)
 
         self.norm = FP16LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         

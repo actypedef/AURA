@@ -18,12 +18,27 @@ from model.quantize import *
 @torch.no_grad()
 def get_reorder_index(model, act_scales, metric='mean'):
     act_orders = {}
+    def is_permutation(x: torch.Tensor) -> bool:
+        if not torch.is_tensor(x) or x.dim() != 1:
+            return False
+            
+        if x.dtype.is_floating_point:
+            return False
+    
+        n = len(x)
+    
+        if n == 0:
+            return True
+    
+        expected = torch.arange(n, device=x.device, dtype=x.dtype)
+        
+        return torch.equal(torch.sort(x).values, expected)
     def reorder_tensor(tensor):
         # assert dimension == 1
         assert tensor.dim() == 1, "Choosing outliers must be 1 dimensional"
         sorted_tensor, sorted_index = torch.sort(tensor, descending=False) # For putting outliers at last
         # _, sorted_index = torch.sort(tensor, descending=True) # For putting outliers at first
-
+        assert is_permutation(sorted_index)
         return sorted_index
         
     for name, m in model.model.named_modules():
@@ -38,6 +53,7 @@ def get_reorder_index(model, act_scales, metric='mean'):
             # else: 
             #     importance = act_scales[inputName]
             act_orders[inputName] = reorder_tensor(act_scales[inputName])
+            # act_orders[inputName] = reorder_tensor(importance)
 
             assert act_orders[inputName].dim() == 1, "Return Index must be 1 dimensional"
 
@@ -96,7 +112,11 @@ def get_act_stats(model, dataloader, device_, metric='mean', seqlen=2048):
             y = y[0]
             assert isinstance(y, torch.Tensor)
         # stat_tensor(name + ".input", x, weight=m.weight.data)
-        stat_tensor(name + ".input", x)
+        # stat_tensor(name + ".output", y, weight=m.weight.data)
+        if 'o_proj' in name or 'down_proj' in name:
+            stat_tensor(name + ".input", x, weight=m.weight.data)
+        else:
+            stat_tensor(name + ".input", x)
         stat_tensor(name + ".output", y)
 
     hooks = []

@@ -407,7 +407,7 @@ __global__ void reorder32_x_kernel(
 
   // --- MODIFIED: 本地寄存器大小加倍以容纳32个元素 ---
   bf16_t input_frag[ELEMENTS_PER_THREAD];
-  uint8_t output_frag_packed[ELEMENTS_PER_THREAD / 2]; // 32个fp4值 = 16字节
+  uint8_t output_frag_packed[ELEMENTS_PER_THREAD];
 
   // Row are independent
   int row_id = blockIdx.x;
@@ -613,7 +613,7 @@ __global__ void reorder32_w_kernel(
 
   // --- MODIFIED: 本地寄存器大小加倍以容纳32个元素 ---
   bf16_t input_frag[ELEMENTS_PER_THREAD];
-  uint8_t output_frag_packed[ELEMENTS_PER_THREAD / 2];
+  uint8_t output_frag_packed[ELEMENTS_PER_THREAD];
 
   // Row are independent
   int row_id = blockIdx.x;
