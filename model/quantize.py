@@ -56,7 +56,7 @@ def dequantize_ue4m3(tensor):
 def quantize_ue8m0(tensor):
     
     exponent = torch.ceil(torch.log2(tensor + 1e-9))
-    exponent = max(-127, min(127, exponent))
+    exponent = torch.clamp(exponent, min=-127, max=127)
     
     reconstructed_val = (2**exponent)
     return reconstructed_val
