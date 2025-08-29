@@ -209,7 +209,7 @@ class QLlamaAttention(nn.Module):
 class LlamaRMSNorm(nn.Module):
     def __init__(
         self,
-        hidden_size, eps, p8_num, select_num, reorder_index=None
+        hidden_size, eps, select_num, reorder_index=None
     ):
         super().__init__()
         self.weight = nn.Parameter(torch.zeros(hidden_size, dtype=torch.bfloat16))
@@ -221,7 +221,7 @@ class LlamaRMSNorm(nn.Module):
         bsz, q_len, _ = hidden_states.shape
         hidden_states = hidden_states.reshape(bsz*q_len, -1).contiguous()
         # print(self.p4_num, self.select_num, self.p8_num)
-        A, SFA = agemm.rmsnorm_quantize_x(hidden_states, self.weight, self.variance_epsilon, self.reorder_index, self.p4_num, self.select_num, self.p8_num)
+        A, SFA = agemm.rmsnorm_quantize_x(hidden_states, self.weight, self.variance_epsilon, self.reorder_index, self.select_num)
         return (A, SFA, bsz, q_len)
         # return rms_norm(hidden_states, self.weight, self.variance_epsilon)
     
@@ -244,7 +244,6 @@ class LlamaDecoderLayer(nn.Module):
     def __init__(
         self,
         config,
-        p8_nums,
         select_nums,
         layer_idx,
         reorder_index=None,
@@ -255,7 +254,6 @@ class LlamaDecoderLayer(nn.Module):
         self.hidden_size = config.hidden_size
         self.self_attn = QLlamaAttention(
             config,
-            p8_nums=p8_nums,
             select_nums=select_nums,
             reorder_index=reorder_index,
             i=layer_idx
@@ -263,17 +261,16 @@ class LlamaDecoderLayer(nn.Module):
         # self.self_attn = LlamaAttention(config=config, layer_idx=layer_idx)
         self.mlp = QLlamaMLP(
             config,
-            p8_nums=p8_nums,
             select_nums=select_nums,
             reorder_index=reorder_index,
             i=layer_idx
         )
         self.input_layernorm = LlamaRMSNorm(
-            config.hidden_size, eps=config.rms_norm_eps, p8_num=p8_nums[nameTemplate.format(layer_idx, 'self_attn', 'q_proj', 'input')],
+            config.hidden_size, eps=config.rms_norm_eps, 
             select_num=select_nums[nameTemplate.format(layer_idx, 'self_attn', 'q_proj', 'input')], 
         )
         self.post_attention_layernorm = LlamaRMSNorm(
-            config.hidden_size, eps=config.rms_norm_eps, p8_num=p8_nums[nameTemplate.format(layer_idx, 'mlp', 'gate_proj', 'input')],
+            config.hidden_size, eps=config.rms_norm_eps, 
             select_num=select_nums[nameTemplate.format(layer_idx, 'mlp', 'gate_proj', 'input')],
         )
 
@@ -344,15 +341,13 @@ class LlamaModel(LlamaPreTrainedModel):
                                          self.padding_idx)
     
         select_num_filename = f'./saved/{name}_select_num_wikitext2_mean.pt'
-        p8_num_filename = f'./saved/{name}_p8_num_wikitext2_mean.pt'
         select_nums = torch.load(select_num_filename, weights_only=False)
-        p8_nums = torch.load(p8_num_filename, weights_only=False)
         if layer_idx is not None:
             self.layers = nn.ModuleList(
-        [LlamaDecoderLayer(config, p8_nums, select_nums, layer_idx)])
+        [LlamaDecoderLayer(config, select_nums, layer_idx)])
         else:
             self.layers = nn.ModuleList(
-                [LlamaDecoderLayer(config, p8_nums, select_nums, i) for i in range(config.num_hidden_layers)],)
+                [LlamaDecoderLayer(config, select_nums, i) for i in range(config.num_hidden_layers)],)
 
         self.norm = FP16LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         

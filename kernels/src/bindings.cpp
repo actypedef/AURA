@@ -176,6 +176,50 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_w(
     return std::make_tuple(QW, SFW);
 }
 
+std::tuple<torch::Tensor, torch::Tensor> rmsnorm_quantize_x(
+        const torch::Tensor &X,
+        const torch::Tensor &W,
+        const float eps,
+        const torch::Tensor &reorder_index,
+        const int KE
+)
+{
+    int M = X.size(0);
+    int KQ = X.size(1);
+    int K = KQ + KE;
+    auto QX = torch::empty({M, K / 2}, torch::dtype(torch::kUInt8).device(X.device()));
+    auto SFX = torch::empty({(int)get_sfa_buffer_size_in_bytes(M, K)}, torch::dtype(torch::kUInt8).device(X.device()));
+    if (KQ == 4096) { // Llama
+        run_rmsnorm_x_bf16_nvfp4<16, 4096>(
+            (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), eps, 
+            M, reorder_index.data_ptr<int16_t>(), 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 5120) { // Qwen
+        run_rmsnorm_x_bf16_nvfp4<16, 5120>(
+            (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), eps, 
+            M, reorder_index.data_ptr<int16_t>(), 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 3584) { // Qwen
+        run_rmsnorm_x_bf16_nvfp4<16, 3584>(
+            (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), eps, 
+            M, reorder_index.data_ptr<int16_t>(), 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else {
+        std::cerr << "K value is not valid !" << std::endl;
+        throw std::runtime_error(std::string("Value error in run_rmsnorm_x_bf16_nvfp4 "));
+    }
+    return std::make_tuple(QX, SFX);
+}
+
 //====== pybind ======
 
 #define DEFINE_pybind(name) m.def(#name, &name, #name);
@@ -197,6 +241,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m
     m.def("reorder_quantize_w", &reorder_quantize_w,
           "Reorder and quantize weight, return K + KE channels",
           py::arg("W"), py::arg("reorder_index"),
+          py::arg("KE")
+        );
+    m.def("rmsnorm_quantize_x", &rmsnorm_quantize_x,
+          "Rmsnorm and quantize activation, return K + KE channels",
+          py::arg("X"), py::arg("W"), py::arg("eps"), 
+          py::arg("reorder_index"),
           py::arg("KE")
         );
 }

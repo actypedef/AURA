@@ -47,7 +47,7 @@ set(CMAKE_CUDA_ARCHITECTURES 120a)
 add_compile_options(-w)
 add_compile_options(-fpermissive)
 
-add_library(gemm_objs OBJECT src/nvfp4.cu src/reorder.cu)
+add_library(gemm_objs OBJECT src/nvfp4.cu src/reorder.cu src/rmsnorm.cu)
 
 
 # 创建目标可执行文件

@@ -292,7 +292,7 @@ def search_select_proportions(model, dataloader, device_, seqlen, reorder_index,
             keys = keys.reshape(-1, keys.shape[-1]).contiguous()
             seqlen, in_features = keys.shape 
      
-            select_ratio = 0.1
+            select_ratio = 0.08
             select_num = math.ceil(in_features * select_ratio / 64) * 64
             average_bits[name] = 9 * select_ratio + 4.5 * (1.0 - select_ratio)
             

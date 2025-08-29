@@ -13,19 +13,19 @@ python ${dir}/model/main.py ${MODEL} \
         --lm_eval_limit -1\
 
 
-# wikitext2 ppl
-python ${dir}/model/main.py ${MODEL}\
-        --act_sort_metric frobenius\
-        --lm_eval_limit -1\
-        --eval_ppl\
+# # wikitext2 ppl
+# python ${dir}/model/main.py ${MODEL}\
+#         --act_sort_metric frobenius\
+#         --lm_eval_limit -1\
+#         --eval_ppl\
 
 
-#5-shot mmlu
-python ${dir}/model/main.py ${MODEL}\
-        --act_sort_metric frobenius\
-        --tasks mmlu\
-        --lm_eval_num_fewshot 5\
-        --lm_eval_limit -1\
+# #5-shot mmlu
+# python ${dir}/model/main.py ${MODEL}\
+#         --act_sort_metric frobenius\
+#         --tasks mmlu\
+#         --lm_eval_num_fewshot 5\
+#         --lm_eval_limit -1\
 
 # # zero-shot
 # python ${dir}/model/main.py ${MODEL} \
