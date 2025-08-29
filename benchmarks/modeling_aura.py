@@ -43,8 +43,8 @@ class QLinearLayer(nn.Module):
             self.register_parameter("bias", None)
         self.select_num = select_num
     
-        self.B = torch.zeros(out_features, (self.in_feature+self.select_num)//2, dtype=torch.uint8, device='cuda')
-        self.SFB = torch.ones(out_features*s(self.in_feature+self.select_num)//16, dtype=torch.uint8, device='cuda') * 127 
+        self.B = torch.zeros(out_features, (self.in_features+self.select_num)//2, dtype=torch.uint8, device='cuda')
+        self.SFB = torch.ones(out_features * (self.in_features+self.select_num)//16, dtype=torch.uint8, device='cuda') * 127 
         self.reorder_index = torch.arange(self.in_features, dtype=torch.int16, device='cuda') 
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -106,7 +106,7 @@ class QLlamaMLP(nn.Module):
 
     def forward(self, x):   
         bsz, q_len = x[-2], x[-1]
-        return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
+        return self.down_proj(agemm.reorder_quantize_x(self.act_fn(self.gate_proj(x)) * self.up_proj(x), self.down_proj.reorder_index, self.down_proj.select_num)).reshape(bsz, q_len, -1)
         # return self.down_proj(mixedgemm.activate_quantize_x(self.gate_proj(x), self.up_proj(x), self.down_proj.p4_num, self.down_proj.select_num, self.down_proj.p8_num)).reshape(bsz, q_len, -1)
 
 
@@ -339,8 +339,8 @@ class LlamaModel(LlamaPreTrainedModel):
         self.vocab_size = config.vocab_size
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size,
                                          self.padding_idx)
-    
-        select_num_filename = f'./saved/{name}_select_num_wikitext2_mean.pt'
+        
+        select_num_filename = f'./saved/{name}_select_num_wikitext2_frobenius.pt'
         select_nums = torch.load(select_num_filename, weights_only=False)
         if layer_idx is not None:
             self.layers = nn.ModuleList(

@@ -24,9 +24,9 @@ class ModelConfig:
     device: str = dataclasses.field(default="cuda:0")
     
 MODEL_CFGS = {
-    "llama-2-7b":
+    "Llama-2-7B":
         ModelConfig(
-            name='llama-2-7b',
+            name='Llama-2-7B',
             num_layers=32,
             num_heads=32,
             hidden_size=4096,
@@ -34,9 +34,9 @@ MODEL_CFGS = {
             attention_bias=False,
             mlp_bias=False
         ),
-    "llama-3.1-8b":
+    "Llama-3.1-8B":
         ModelConfig(
-            name='llama-3.1-8b',
+            name='Llama-3.1-8B',
             num_layers=32,
             num_heads=32,
             hidden_size=4096,
@@ -87,7 +87,7 @@ def module_benchmark(module):
 
 
 def get_model_quantized(name, model_cfg):
-    from modeling_micromix import LlamaConfig, LlamaForCausalLM
+    from modeling_aura import LlamaConfig, LlamaForCausalLM
     model = LlamaForCausalLM(
         name,
         LlamaConfig(
@@ -145,7 +145,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         '--model', type=str,
-        default='llama-3.1-8b'
+        default='Llama-3.1-8B'
     )
     
     parser.add_argument(

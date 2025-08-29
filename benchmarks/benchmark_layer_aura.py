@@ -24,9 +24,9 @@ class ModelConfig:
     device: str = dataclasses.field(default="cuda:0")
     
 MODEL_CFGS = {
-    "qwen-2.5-7b":
+    "Qwen2.5-7B":
         ModelConfig(
-            name='qwen-2.5-7b',
+            name='Qwen2.5-7B',
             num_layers=28,
             num_heads=28,
             hidden_size=3584,
@@ -34,9 +34,9 @@ MODEL_CFGS = {
             attention_bias=True,
             mlp_bias=True
         ),
-    "llama-2-7b":
+    "Llama-2-7B":
         ModelConfig(
-            name='llama-2-7b',
+            name='Llama-2-7B',
             num_layers=32,
             num_heads=32,
             hidden_size=4096,
@@ -44,9 +44,9 @@ MODEL_CFGS = {
             attention_bias=False,
             mlp_bias=False
         ),
-    "llama-3.1-8b":
+    "Llama-3.1-8B":
         ModelConfig(
-            name='llama-3.1-8b',
+            name='Llama-3.1-8B',
             num_layers=32,
             num_heads=32,
             hidden_size=4096,
@@ -54,9 +54,9 @@ MODEL_CFGS = {
             attention_bias=False,
             mlp_bias=False
         ),
-    "qwen-2.5-14b":
+    "Qwen2.5-14B":
         ModelConfig(
-            name='qwen-2.5-14b',
+            name='Qwen2.5-14B',
             num_layers=48,
             num_heads=40,
             hidden_size=5120,
@@ -64,9 +64,9 @@ MODEL_CFGS = {
             attention_bias=True,
             mlp_bias=True
         ),
-    "qwen-2.5-32b":
+    "Qwen2.5-32B":
         ModelConfig(
-            name='qwen-2.5-32b',
+            name='Qwen2.5-32B',
             num_layers=64,
             num_heads=40,
             hidden_size=5120,
@@ -133,7 +133,7 @@ def _build_cache(batch_size, length, layer, disable_quant, num_key_value_heads, 
 
 
 def get_model_quantized(name, model_cfg, layer_idx):
-    from modeling_micromix import LlamaConfig, LlamaForCausalLM
+    from modeling_aura import LlamaConfig, LlamaForCausalLM
     model = LlamaForCausalLM(
         name,
         LlamaConfig(
@@ -211,7 +211,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         '--model', type=str,
-        default='qwen-2.5-7b'
+        default='Qwen2.5-7B'
     )
     
     parser.add_argument(
