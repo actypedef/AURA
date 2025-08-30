@@ -88,8 +88,8 @@ def get_act_stats(model, dataloader, device_, metric='mean', seqlen=2048):
             comming_H = tensorH.matmul(tensorH.t())
             comming_scales = torch.diag(comming_H)
         elif metric == 'frobenius':
-            # tensorE = tensor - quantize_nvfp4_tensor(tensor, group_size=16)
-            tensorE = tensor - quantize_mxfp4_tensor(tensor, group_size=32)
+            tensorE = tensor - quantize_nvfp4_tensor(tensor, group_size=16)
+            # tensorE = tensor - quantize_mxfp4_tensor(tensor, group_size=32)
             if weight is not None:
                 comming_scales = torch.linalg.norm(tensorE, ord=2, dim=0).float().cpu() * torch.linalg.norm(weight, ord=2, dim=0).float().cpu()
             else:
@@ -115,7 +115,7 @@ def get_act_stats(model, dataloader, device_, metric='mean', seqlen=2048):
             assert isinstance(y, torch.Tensor)
         # stat_tensor(name + ".input", x, weight=m.weight.data)
         # stat_tensor(name + ".output", y, weight=m.weight.data)
-        if 'o_proj' in name or 'down_proj' in name:
+        if ('o_proj' in name or 'down_proj' in name) and (metric == 'frobenius'):
             stat_tensor(name + ".input", x, weight=m.weight.data)
         else:
             stat_tensor(name + ".input", x)
@@ -294,7 +294,7 @@ def search_select_proportions(model, dataloader, device_, seqlen, reorder_index,
             keys = keys.reshape(-1, keys.shape[-1]).contiguous()
             seqlen, in_features = keys.shape 
      
-            select_ratio = 0.02
+            select_ratio = 1
             select_num = math.ceil(in_features * select_ratio / 64) * 64
             average_bits[name] = 9 * select_ratio + 4.5 * (1.0 - select_ratio)
             
