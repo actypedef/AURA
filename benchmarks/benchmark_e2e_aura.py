@@ -24,9 +24,19 @@ class ModelConfig:
     device: str = dataclasses.field(default="cuda:0")
     
 MODEL_CFGS = {
-    "Llama-2-7B":
+    "qwen2.5-7b":
         ModelConfig(
-            name='Llama-2-7B',
+            name='qwen2.5-7b',
+            num_layers=28,
+            num_heads=28,
+            hidden_size=3584,
+            intermediate_size=18944,
+            attention_bias=True,
+            mlp_bias=True
+        ),
+    "llama-2-7b":
+        ModelConfig(
+            name='llama-2-7b',
             num_layers=32,
             num_heads=32,
             hidden_size=4096,
@@ -34,15 +44,35 @@ MODEL_CFGS = {
             attention_bias=False,
             mlp_bias=False
         ),
-    "Llama-3.1-8B":
+    "llama-3.1-8b":
         ModelConfig(
-            name='Llama-3.1-8B',
+            name='llama-3.1-8b',
             num_layers=32,
             num_heads=32,
             hidden_size=4096,
             intermediate_size=14336,
             attention_bias=False,
             mlp_bias=False
+        ),
+    "qwen2.5-14b":
+        ModelConfig(
+            name='qwen2.5-14b',
+            num_layers=48,
+            num_heads=40,
+            hidden_size=5120,
+            intermediate_size=13824,
+            attention_bias=True,
+            mlp_bias=True
+        ),
+    "qwen2.5-32b":
+        ModelConfig(
+            name='qwen2.5-32b',
+            num_layers=64,
+            num_heads=40,
+            hidden_size=5120,
+            intermediate_size=27648,
+            attention_bias=True,
+            mlp_bias=True
         ),
 }
 
@@ -130,9 +160,9 @@ def run_all_for_model(model, bsz, prefill, decode, config):
 def benchmark(args):
     times = []
    
-    model = get_model_quantized(args.model, MODEL_CFGS[args.model])
+    model = get_model_quantized(args.model.lower(), MODEL_CFGS[args.model.lower()])
     time_prefill_i4, mem_i4 = run_all_for_model(
-        model, args.batch_size, args.prefill_seq_len, args.decode_steps, MODEL_CFGS[args.model])
+        model, args.batch_size, args.prefill_seq_len, args.decode_steps, MODEL_CFGS[args.model.lower()])
     del model
     _cleanup()
 
@@ -145,7 +175,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         '--model', type=str,
-        default='Llama-3.1-8B'
+        default='llama-3.1-8b'
     )
     
     parser.add_argument(

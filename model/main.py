@@ -96,8 +96,8 @@ if __name__ == '__main__':
 
     import os
   
-    index_filename = f'./saved/{model_name}_reorder_index_wikitext2_{args.act_sort_metric}.pt'
-    select_num_filename = f'./saved/{model_name}_select_num_wikitext2_{args.act_sort_metric}.pt'
+    index_filename = f'./saved/{model_name.lower()}_reorder_index_wikitext2_{args.act_sort_metric}.pt'
+    select_num_filename = f'./saved/{model_name.lower()}_select_num_wikitext2_{args.act_sort_metric}.pt'
  
     
     assert os.path.isfile(index_filename), "reorder index file not found."
@@ -170,12 +170,12 @@ if __name__ == '__main__':
         import logging
         from datetime import datetime
 
-        log_filename = f"./results/log_{model_name}_{args.tasks}_{datetime.now().strftime('%Y%m%d')}.log"
+        log_filename = f"./results/log_{model_name.lower()}_{args.tasks}_{datetime.now().strftime('%Y%m%d')}.log"
         logging.basicConfig(
                             filename=log_filename,
                             level=logging.INFO,
                             format='%(asctime)s - %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S'
                         )
-        logging.info(f"Results for {model_name} on {args.tasks}:\n{table_results}")
+        logging.info(f"Results for {model_name.lower()} on {args.tasks}:\n{table_results}")
   

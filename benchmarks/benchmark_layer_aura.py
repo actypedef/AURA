@@ -24,9 +24,9 @@ class ModelConfig:
     device: str = dataclasses.field(default="cuda:0")
     
 MODEL_CFGS = {
-    "Qwen2.5-7B":
+    "qwen2.5-7b":
         ModelConfig(
-            name='Qwen2.5-7B',
+            name='qwen2.5-7b',
             num_layers=28,
             num_heads=28,
             hidden_size=3584,
@@ -34,9 +34,9 @@ MODEL_CFGS = {
             attention_bias=True,
             mlp_bias=True
         ),
-    "Llama-2-7B":
+    "llama-2-7b":
         ModelConfig(
-            name='Llama-2-7B',
+            name='llama-2-7b',
             num_layers=32,
             num_heads=32,
             hidden_size=4096,
@@ -44,9 +44,9 @@ MODEL_CFGS = {
             attention_bias=False,
             mlp_bias=False
         ),
-    "Llama-3.1-8B":
+    "llama-3.1-8b":
         ModelConfig(
-            name='Llama-3.1-8B',
+            name='llama-3.1-8b',
             num_layers=32,
             num_heads=32,
             hidden_size=4096,
@@ -54,9 +54,9 @@ MODEL_CFGS = {
             attention_bias=False,
             mlp_bias=False
         ),
-    "Qwen2.5-14B":
+    "qwen2.5-14b":
         ModelConfig(
-            name='Qwen2.5-14B',
+            name='qwen2.5-14b',
             num_layers=48,
             num_heads=40,
             hidden_size=5120,
@@ -64,9 +64,9 @@ MODEL_CFGS = {
             attention_bias=True,
             mlp_bias=True
         ),
-    "Qwen2.5-32B":
+    "qwen2.5-32b":
         ModelConfig(
-            name='Qwen2.5-32B',
+            name='qwen2.5-32b',
             num_layers=64,
             num_heads=40,
             hidden_size=5120,
@@ -177,17 +177,17 @@ def run_all_for_model(layer, bsz, prefill, decode, config):
 def benchmark(args):
     times = []
     memories = []
-    for i in range(MODEL_CFGS[args.model].num_layers):
-        model = get_model_quantized(args.model, MODEL_CFGS[args.model], i)
+    for i in range(MODEL_CFGS[args.model.lower()].num_layers):
+        model = get_model_quantized(args.model.lower(), MODEL_CFGS[args.model.lower()], i)
         layer = model.model.layers[0]
         del model
         _cleanup()
         time_prefill_i4, mem_i4 = run_all_for_model(
-            layer, args.batch_size, args.prefill_seq_len, args.decode_steps, MODEL_CFGS[args.model])
+            layer, args.batch_size, args.prefill_seq_len, args.decode_steps, MODEL_CFGS[args.model.lower()])
         del layer
         _cleanup()
         
-        print(f"{args.model}, DecoderLayer {i}:")
+        print(f"{args.model.lower()}, DecoderLayer {i}:")
         print(f"Prefill Int4 time: {np.mean(time_prefill_i4):.3f} +- {1.96 * np.std(time_prefill_i4):.3f}ms")
         print(f"Int4 memory: {np.mean(mem_i4) / (1024 * 1024 * 1024):.3f}GB +- {1.96 * np.std(mem_i4):.3f}")
         print('--------------')
@@ -211,7 +211,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         '--model', type=str,
-        default='Qwen2.5-7B'
+        default='qwen2.5-7b'
     )
     
     parser.add_argument(
