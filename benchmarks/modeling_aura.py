@@ -370,9 +370,12 @@ class LlamaModel(LlamaPreTrainedModel):
         if past_key_value is None:
             # 初始化 KV Cache 张量（仅在第一次调用时）
             device = hidden_states.device
+            # max_seq_len = getattr(self, '_expected_max_length', q_len)
             seqlens = [q_len] * bsz
             # total_pages = int(256000 / self.page_len)
-            total_pages = math.ceil(bsz * q_len / self.page_len) 
+            total_pages = math.ceil(bsz * q_len / self.page_len)
+            # num_pages_per_seq = math.ceil(max_seq_len / self.page_len)
+            # total_pages = bsz * num_pages_per_seq
             layer_buf = torch.empty(
             (total_pages, 2, self.page_len, self.config.num_heads, self.head_dim),
             dtype=torch.bfloat16,
@@ -399,6 +402,21 @@ class LlamaModel(LlamaPreTrainedModel):
                 "kv_last_page_len": kv_last_page_len,
                 # "next_page_id": i,
             } for i in range(self.config.num_hidden_layers)]
+            # past_key_value = []
+            # for i in range(self.config.num_hidden_layers):
+            #     # 为每一层创建一个独立的 buffer
+            #     layer_buf = torch.empty(
+            #         (total_pages, 2, self.page_len, self.config.num_heads, self.head_dim),
+            #         dtype=torch.bfloat16,
+            #         device="cuda"
+            #     )
+            #     # ... （kv_indices 等可以共享，因为它们的结构是一样的）
+            #     past_key_value.append({
+            #         "layer_buf": layer_buf,
+            #         "kv_indices": kv_indices,
+            #         "kv_indptr": kv_indptr,
+            #         "kv_last_page_len": kv_last_page_len,
+            #     })
     
         for layer_idx, decoder_layer in enumerate(self.layers):
             torch.cuda.nvtx.range_push(f"layer={layer_idx}")
@@ -413,28 +431,54 @@ class LlamaModel(LlamaPreTrainedModel):
         return hidden_states, past_key_value
 
 
-class LlamaForCausalLM(LlamaModel):
+# class LlamaForCausalLM(LlamaModel):
 
+#     def __init__(self, name, config, layer_idx=None):
+#         super().__init__(name, config, layer_idx)
+
+#         self.model = LlamaModel(name, config, layer_idx)
+#         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=config.attention_bias, dtype=torch.bfloat16)
+#         self.post_init()
+#         self.config = config
+#     def forward(
+#       self,
+#       input_ids: torch.Tensor,
+#         past_key_value=None
+#     ) -> Tuple[torch.Tensor, torch.Tensor]:
+#         torch.cuda.nvtx.range_push("LlamaForCausalLM")
+#         hidden_states, past_key_value = self.model(input_ids, past_key_value)
+#         torch.cuda.nvtx.range_push("lm_head")
+        
+#         logits = self.lm_head(hidden_states.to(torch.bfloat16))
+#         torch.cuda.nvtx.range_pop()
+#         torch.cuda.nvtx.range_pop()
+#         # return CausalLMOutputWithPast(
+#         #     past_key_value=past_key_value,
+#         # )
+#         return past_key_value
+
+class LlamaForCausalLM(LlamaPreTrainedModel): # 通常CausalLM直接继承PreTrainedModel
     def __init__(self, name, config, layer_idx=None):
-        super().__init__(name, config, layer_idx)
+        super().__init__(config) # 继承 PreTrainedModel，它会处理 config 和一些通用初始化
 
-        self.model = LlamaModel(name, config, layer_idx)
+        # LlamaForCausalLM 应该包含一个 LlamaModel 实例作为其骨干
+        self.model = LlamaModel(name, config, layer_idx) 
+        
+        # 然后添加 CausalLM 独有的 lm_head
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=config.attention_bias, dtype=torch.bfloat16)
+        
         self.post_init()
         self.config = config
+
     def forward(
-      self,
-      input_ids: torch.Tensor,
+        self,
+        input_ids: torch.Tensor,
         past_key_value=None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        torch.cuda.nvtx.range_push("LlamaForCausalLM")
+        # 调用骨干 LlamaModel 的 forward
         hidden_states, past_key_value = self.model(input_ids, past_key_value)
-        torch.cuda.nvtx.range_push("lm_head")
         
         logits = self.lm_head(hidden_states.to(torch.bfloat16))
-        torch.cuda.nvtx.range_pop()
-        torch.cuda.nvtx.range_pop()
-        # return CausalLMOutputWithPast(
-        #     past_key_value=past_key_value,
-        # )
-        return past_key_value
+        
+        # 返回 past_key_value (根据您的原代码)
+        return past_key_value 

@@ -78,8 +78,8 @@ MODEL_CFGS = {
 
 
 benchmark_dtypes = ["int4", torch.float16]
-num_warmup_steps = 3
-num_bench_steps = 10
+num_warmup_steps = 2
+num_bench_steps = 4
 
 def repeated_run(num_repeats=10):
     def func(module):
