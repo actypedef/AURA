@@ -139,6 +139,31 @@ def run_prefill(model, bsz, prefill_length, config):
    
     return module_benchmark(_prefill)
 
+def run_decode(model, bsz, prefill_length, decode_steps):
+    device = 'cuda'
+    test_input = torch.randint(100, 200, (bsz, prefill_length), dtype=torch.int32, device=device)
+    model._expected_max_length = prefill_length + decode_steps
+    out = model(test_input)
+    past_key_value = out
+    del out
+    _cleanup()
+    next_input = torch.tensor([[100] for _ in range (bsz)], dtype=torch.int32, device=device)
+    def _decode_for_multiple_steps():
+        # past_key_value.length = prefill_length
+        for _ in range(decode_steps):
+            model(next_input, past_key_value=past_key_value)
+    return module_benchmark(_decode_for_multiple_steps)
+
+def run_e2e(model, bsz, prefill_length, decode_steps):
+    device = 'cuda'
+    test_input = torch.randint(100, 200, (bsz, prefill_length), dtype=torch.int32, device=device)
+    next_input = torch.tensor([[100] for _ in range (bsz)], dtype=torch.int32, device=device)
+    def _prefill_and_decode_for_multiple_steps():
+        model._expected_max_length = prefill_length + decode_steps
+        out = model(test_input)
+        for _ in range(decode_steps):
+            model(next_input, past_key_value=out)
+    return module_benchmark(_prefill_and_decode_for_multiple_steps)
 
 
 def _wait_for_input():
@@ -152,7 +177,14 @@ def run_all_for_model(model, bsz, prefill, decode, config):
     time_prefill, memory_prefill = run_prefill(model, bsz, prefill, config)
     
     _cleanup()
-    return time_prefill, memory_prefill
+    if decode is not None:
+        time_decode, memory_decode = run_decode(model, bsz, prefill, decode)
+        _cleanup()
+        time_e2e, _ = run_e2e(model, bsz, prefill, decode)
+        _cleanup()
+    else:
+        time_decode = time_e2e = None
+    return time_prefill, time_decode, time_e2e, memory_decode
 
 
 
@@ -161,14 +193,20 @@ def benchmark(args):
     times = []
    
     model = get_model_quantized(args.model.lower(), MODEL_CFGS[args.model.lower()])
-    time_prefill_i4, mem_i4 = run_all_for_model(
+    time_prefill_i4, time_decode_i4, time_e2e_i4, mem_i4 = run_all_for_model(
         model, args.batch_size, args.prefill_seq_len, args.decode_steps, MODEL_CFGS[args.model.lower()])
     del model
     _cleanup()
 
-    print(f"Prefill Int4 time: {np.mean(time_prefill_i4):.3f} +- {1.96 * np.std(time_prefill_i4):.3f}ms")
-    print(f"Int4 memory: {np.mean(mem_i4) / (1024 * 1024 * 1024):.3f}GB +- {1.96 * np.std(mem_i4):.3f}")
+    print(f"Prefill AURA time: {np.mean(time_prefill_i4):.3f} +- {1.96 * np.std(time_prefill_i4):.3f}ms")
     print('--------------')
+    if args.decode_steps is not None:
+        print(f"Decode AURA time: {np.mean(time_decode_i4):.3f} +- {1.96 * np.std(time_decode_i4):.3f}ms")
+        print(f"E2E AURA time: {np.mean(time_e2e_i4):.3f} +- {1.96 * np.std(time_e2e_i4):.3f}ms")
+        print('--------------')
+    
+    print(f"AURA memory: {np.mean(mem_i4) / (1024 * 1024 * 1024):.3f}GB +- {1.96 * np.std(mem_i4):.3f}")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

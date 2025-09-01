@@ -7,7 +7,7 @@ import agemm
 
 N, K = 4096, 4096
 test_M_pool = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
-select_ratio = 0.05
+select_ratio = 0
 KE = math.ceil(K * select_ratio / 64) * 64
 
 @torch.no_grad()
@@ -32,8 +32,9 @@ def test_quant(M,N,K):
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
         torch.cuda.synchronize()
-        start_event.record()
+        # start_event.record()
         qx, sfx = agemm.reorder_quantize_x(x, reorder_index, KE)
+        start_event.record()
         y = agemm.matmul(qx, qw, sfx, sfw)
         end_event.record()
         torch.cuda.synchronize()

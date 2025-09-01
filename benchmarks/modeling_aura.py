@@ -331,6 +331,7 @@ class FP16LlamaRMSNorm(nn.Module):
         variance = hidden_states.pow(2).mean(-1, keepdim=True)
         hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
         return self.weight * hidden_states.to(input_dtype)
+
 class LlamaModel(LlamaPreTrainedModel):
 
     def __init__(self, name: str, config: LlamaConfig, layer_idx=None):
@@ -436,3 +437,4 @@ class LlamaForCausalLM(LlamaModel):
         # return CausalLMOutputWithPast(
         #     past_key_value=past_key_value,
         # )
+        return past_key_value

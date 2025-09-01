@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
+import gc
 
 
 # --- 模拟 nvfp4 核心函数 ---
@@ -24,6 +25,21 @@ def quantize_e2m1(tensor):
 
 def dequantize_e2m1(tensor):
     # 在伪量化中，已经是模拟后的浮点数值，直接返回
+    return tensor
+
+def quantize_int4(tensor):
+    representable_vals = torch.tensor([
+        -8.0, -7.0, -6.0, -5.0, -4.0, -3.0, -2.0, -1.0,
+        0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0
+    ], device=tensor.device, dtype=tensor.dtype)
+    
+    # 使用广播和argmin找到每个元素最近的可表示值
+    diff = torch.abs(tensor.unsqueeze(-1) - representable_vals)
+    indices = torch.argmin(diff, dim=-1)
+    return representable_vals[indices]
+
+def dequantize_int4(tensor):
+    # 在伪量化中，已经是模拟后的值，直接返回
     return tensor
 
 def quantize_ue4m3(tensor):
@@ -152,18 +168,56 @@ def quantize_mxfp4_tensor(tensor, group_size=32):
         
     return dequantized_tensor.view(original_shape)
 
+def quantize_int4_tensor(tensor, group_size=128):
+
+    original_shape = tensor.shape
+    
+    # 填充张量以确保其最后一个维度是 group_size 的倍数
+    padding = (group_size - tensor.shape[-1] % group_size) % group_size
+    if padding != 0:
+        tensor = F.pad(tensor, (0, padding))
+        
+    reshaped_tensor = tensor.view(-1, group_size)
+    
+    max_abs_val = torch.max(torch.abs(reshaped_tensor), dim=1, keepdim=True)[0]
+    scale = max_abs_val / 7
+    scale[scale == 0] = 1e-9 # 避免除以零
+    
+    # 3. 量化 scale 
+    dequantized_scale = scale
+    
+    # 4. 归一化数据
+    normalized_tensor = reshaped_tensor / dequantized_scale
+    
+    # 5. 量化到 int4
+    quantized_int4_tensor = quantize_int4(normalized_tensor)
+    
+    # --- 反量化以模拟精度损失 ---
+    dequantized_tensor_groups = dequantize_int4(quantized_int4_tensor) * dequantized_scale
+    
+    # 恢复形状
+    dequantized_tensor = dequantized_tensor_groups.view(tensor.shape)
+    
+    # 移除填充
+    if padding != 0:
+        dequantized_tensor = dequantized_tensor[..., :-padding]
+        
+    return dequantized_tensor.view(original_shape)
+
 def reorder_quantize_w(w, reorder_index, select_num):
     scale_w = w.abs().max(dim=1, keepdim=True)[0] / 63.0
     scale_w[scale_w == 0] = 1e-9
     scale_w[scale_w != 0] = 1.0
     scaled_w = w / scale_w
     if select_num == 0:
-        return quantize_nvfp4_tensor(scaled_w), scale_w
+        # return quantize_nvfp4_tensor(scaled_w), scale_w
         # return quantize_mxfp4_tensor(scaled_w), scale_w
+        return quantize_int4_tensor(scaled_w), scale_w
     else:
         topk_index = reorder_index[:select_num]
-        return torch.cat([quantize_nvfp4_tensor(scaled_w), quantize_nvfp4_tensor(scaled_w[:, topk_index])], dim=1), scale_w
+        # return torch.cat([quantize_nvfp4_tensor(scaled_w), quantize_nvfp4_tensor(scaled_w[:, topk_index])], dim=1), scale_w
         # return torch.cat([quantize_mxfp4_tensor(scaled_w), quantize_mxfp4_tensor(scaled_w[:, topk_index])], dim=1), scale_w
+        return torch.cat([quantize_int4_tensor(scaled_w), quantize_int4_tensor(scaled_w[:, topk_index])], dim=1), scale_w
 
 def reorder_quantize_x(x, reorder_index, select_num):
     scale_x = x.abs().max(dim=1, keepdim=True)[0] / 63.0
@@ -171,13 +225,16 @@ def reorder_quantize_x(x, reorder_index, select_num):
     scale_x[scale_x != 0] = 1.0
     scaled_x = x / scale_x
     if select_num == 0:
-        return quantize_nvfp4_tensor(scaled_x), scale_x
+        # return quantize_nvfp4_tensor(scaled_x), scale_x
         # return quantize_mxfp4_tensor(scaled_x), scale_x
+        return quantize_int4_tensor(scaled_x), scale_x
     else:
         topk_index = reorder_index[:select_num]
-        q_x = quantize_nvfp4_tensor(scaled_x)
+        # q_x = quantize_nvfp4_tensor(scaled_x)
         # q_x = quantize_mxfp4_tensor(scaled_x)
+        q_x = quantize_int4_tensor(scaled_x)
         error_e = scaled_x - q_x
-        q_error_k = quantize_nvfp4_tensor(error_e[:, topk_index])
+        # q_error_k = quantize_nvfp4_tensor(error_e[:, topk_index])
         # q_error_k = quantize_mxfp4_tensor(error_e[:, topk_index])
+        q_error_k = quantize_int4_tensor(error_e[:, topk_index])
         return torch.cat([q_x, q_error_k], dim=1), scale_x

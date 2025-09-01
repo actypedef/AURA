@@ -90,6 +90,7 @@ def get_act_stats(model, dataloader, device_, metric='mean', seqlen=2048):
         elif metric == 'frobenius':
             tensorE = tensor - quantize_nvfp4_tensor(tensor, group_size=16)
             # tensorE = tensor - quantize_mxfp4_tensor(tensor, group_size=32)
+            # tensorE = tensor - quantize_int4_tensor(tensor, group_size=128)
             if weight is not None:
                 comming_scales = torch.linalg.norm(tensorE, ord=2, dim=0).float().cpu() * torch.linalg.norm(weight, ord=2, dim=0).float().cpu()
             else:
