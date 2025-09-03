@@ -1,5 +1,0 @@
-Load from previous results from ./eval_plus/output/humaneval/qwen2_32B_temp_0.0/eval_results.json
-humaneval (base tests)
-pass@1:	0.610
-humaneval+ (base + extra tests)
-pass@1:	0.537

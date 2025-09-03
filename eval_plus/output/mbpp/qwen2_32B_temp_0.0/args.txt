@@ -1,1 +1,0 @@
-Namespace(model_type='qwen2', model_path='/root/autodl-tmp/Qwen2.5-Coder-32B/', model_size='32B', bs=1, temperature=0.0, dataset='mbpp', root='./eval_plus/output', n_samples=1, resume=False, output=None, tensor_parallel_size=1, contract_type='none', greedy=True, id_range=None)
