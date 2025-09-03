@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import time
 import agemm  
 step = 512
-M, N, K = 1, 3584, 18944
+M, N, K = 1, 5120, 27648
 for i in range(K // step + 1):
     group = 16
     KE = step * i

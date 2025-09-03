@@ -170,3 +170,19 @@ void run_rmsnorm_x_bf16_nvfp4(
   sf_t *q_scale,
   int KQ, int KE
 );
+template<int group_size, int hidden_dim>
+void run_down32_x_bf16_nvfp4(
+  bf16_t *hidden_states,
+  int seq_len,
+  uint8_t *q_out,
+  sf_t *q_scale,
+  int KQ, int KE
+);
+template<int group_size, int hidden_dim>
+void run_down32_w_bf16_nvfp4(
+  bf16_t *hidden_states,
+  int out_features,
+  uint8_t *q_out,
+  sf_t *q_scale,
+  int KQ, int KE
+);

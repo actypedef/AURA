@@ -1,0 +1,1 @@
+Namespace(model_type='qwen2', model_path='/root/autodl-tmp/qwen-2.5-coder-7b/', model_size='7B', bs=1, temperature=0.0, dataset='humaneval', root='./output/', n_samples=1, resume=False, output=None, tensor_parallel_size=1, contract_type='none', greedy=True, id_range=None)

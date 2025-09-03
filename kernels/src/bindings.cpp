@@ -60,6 +60,13 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_x(
             KQ, KE
         );
     }
+    if (KQ == 8192) { // Llama
+        run_reorder_x_bf16_nvfp4<16, 8192>(
+            (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), M, reorder_index.data_ptr<int16_t>(), 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
     else if (KQ == 14336) {
         run_reorder_x_bf16_nvfp4<16, 14336>(
             (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), M, reorder_index.data_ptr<int16_t>(), 
@@ -102,6 +109,20 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_x(
             KQ, KE
         );
     }
+    else if (KQ == 27648) {
+        run_down32_x_bf16_nvfp4<32, 27648>(
+            (cutlass::bfloat16_t *)(torch::index_select(X, 1, reorder_index.to(torch::kInt32))).data_ptr<at::BFloat16>(), M, 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 28672) {
+        run_down32_x_bf16_nvfp4<32, 28672>(
+            (cutlass::bfloat16_t *)(torch::index_select(X, 1, reorder_index.to(torch::kInt32))).data_ptr<at::BFloat16>(), M, 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
     else {
         std::cerr << "K value is not valid !" << std::endl;
         throw std::runtime_error(std::string("Value error in run_reorder_x_bf16_nvfp4 "));
@@ -121,6 +142,13 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_w(
     auto QW = torch::empty({N, K / 2}, torch::dtype(torch::kUInt8).device(W.device()));
     auto SFW = torch::empty({(int)get_sfb_buffer_size_in_bytes(N, K)}, torch::dtype(torch::kUInt8).device(W.device()));
     if (KQ == 4096) { //Llama
+        run_reorder_w_bf16_nvfp4<16, 4096>(
+            (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), N, reorder_index.data_ptr<int16_t>(), 
+            QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    if (KQ == 8192) { //Llama
         run_reorder_w_bf16_nvfp4<16, 4096>(
             (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), N, reorder_index.data_ptr<int16_t>(), 
             QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
@@ -169,6 +197,20 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_w(
             KQ, KE
         );
     }
+    else if (KQ == 27648) {
+        run_down32_w_bf16_nvfp4<32, 27648>(
+            (cutlass::bfloat16_t *)(torch::index_select(W, 1, reorder_index.to(torch::kInt32))).data_ptr<at::BFloat16>(), N, 
+            QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    else if (KQ == 28672) {
+        run_down32_w_bf16_nvfp4<32, 28672>(
+            (cutlass::bfloat16_t *)(torch::index_select(W, 1, reorder_index.to(torch::kInt32))).data_ptr<at::BFloat16>(), N, 
+            QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
     else {
         std::cerr << "K value is not valid !" << std::endl;
         throw std::runtime_error(std::string("Value error in run_reorder_w_bf16_nvfp4 "));
@@ -191,6 +233,14 @@ std::tuple<torch::Tensor, torch::Tensor> rmsnorm_quantize_x(
     auto SFX = torch::empty({(int)get_sfa_buffer_size_in_bytes(M, K)}, torch::dtype(torch::kUInt8).device(X.device()));
     if (KQ == 4096) { // Llama
         run_rmsnorm_x_bf16_nvfp4<16, 4096>(
+            (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), eps, 
+            M, reorder_index.data_ptr<int16_t>(), 
+            QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 
+            KQ, KE
+        );
+    }
+    if (KQ == 8192) { // Llama
+        run_rmsnorm_x_bf16_nvfp4<16, 8192>(
             (cutlass::bfloat16_t *)X.data_ptr<at::BFloat16>(), (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), eps, 
             M, reorder_index.data_ptr<int16_t>(), 
             QX.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFX.data_ptr<uint8_t>()), 

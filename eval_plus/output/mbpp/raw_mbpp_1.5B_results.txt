@@ -1,0 +1,5 @@
+Load from previous results from ./output//mbpp/qwen2_1.5B_temp_0.0/eval_results.json
+mbpp (base tests)
+pass@1:	0.381
+mbpp+ (base + extra tests)
+pass@1:	0.323
