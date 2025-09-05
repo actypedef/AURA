@@ -2,7 +2,7 @@
 # https://github.com/huggingface/transformers/blob/17a55534f5e5df10ac4804d4270bf6b8cc24998d/src/transformers/models/llama/modeling_llama.py
 
 import math
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 from torch import nn
@@ -11,13 +11,18 @@ from transformers.models.llama.modeling_llama import (ACT2FN,
     LlamaMLP,
     PreTrainedModel,
     rotate_half,
+    apply_rotary_pos_emb, 
+    LlamaFlashAttention2, 
 )
+from transformers import Cache
 
 import flashinfer
 
 import sys
 sys.path.append('./kernels/build/')
 import agemm
+sys.path.append('./model/')
+from kv_cache import *
 
 class QLinearLayer(nn.Module):
     __constants__ = ["in_features", "out_features"]
@@ -111,23 +116,21 @@ class QLlamaMLP(nn.Module):
 
 
     
-class QLlamaAttention(nn.Module):
+class QLlamaAttention(LlamaFlashAttention2):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
 
     def __init__(
         self, 
-        config,
-        select_nums,
-        i,
+        *args,
         reorder_index=None,
+        select_nums=None,
+        **kwargs,
     ):
-        super().__init__()
-        self.config = config
-        self.hidden_size = config.hidden_size
-        self.num_heads = config.num_heads
+        super().__init__(*args, **kwargs)
+        self.hidden_size = self.config.hidden_size
+        self.num_heads = self.config.num_heads
         self.head_dim = self.hidden_size // self.num_heads
     
-        self.layer_idx = i
         if (self.head_dim * self.num_heads) != self.hidden_size:
             raise ValueError(
                 f"hidden_size must be divisible by num_heads (got `hidden_size`: {self.hidden_size}"
@@ -135,28 +138,42 @@ class QLlamaAttention(nn.Module):
             )
         nameTemplate = 'layers.{}.{}.{}.{}'
         self.q_proj = QLinearLayer(
-            in_features=self.hidden_size, out_features=self.hidden_size, bias=config.attention_bias,
-            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'q_proj', 'input')],
+            in_features=self.hidden_size, out_features=self.hidden_size, bias=self.config.attention_bias,
+            select_num=select_nums[nameTemplate.format(self.layer_idx, 'self_attn', 'q_proj', 'input')],
         )
         self.k_proj = QLinearLayer(
-            in_features=self.hidden_size, out_features=self.hidden_size, bias=config.attention_bias,
-            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'k_proj', 'input')],
+            in_features=self.hidden_size, out_features=self.hidden_size, bias=self.config.attention_bias,
+            select_num=select_nums[nameTemplate.format(self.layer_idx, 'self_attn', 'k_proj', 'input')],
         )
         self.v_proj = QLinearLayer(
-            in_features=self.hidden_size, out_features=self.hidden_size, bias=config.attention_bias,
-            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'v_proj', 'input')],
+            in_features=self.hidden_size, out_features=self.hidden_size, bias=self.config.attention_bias,
+            select_num=select_nums[nameTemplate.format(self.layer_idx, 'self_attn', 'v_proj', 'input')],
         )
         self.o_proj = QLinearLayer(
-            in_features=self.hidden_size, out_features=self.hidden_size, bias=config.attention_bias,
-            select_num=select_nums[nameTemplate.format(i, 'self_attn', 'o_proj', 'input')],
+            in_features=self.hidden_size, out_features=self.hidden_size, bias=self.config.attention_bias,
+            select_num=select_nums[nameTemplate.format(self.layer_idx, 'self_attn', 'o_proj', 'input')],
         )
         self.page_len = 128
         
+#     def forward(
+#     self,
+#     hidden_states: torch.Tensor,
+#     past_key_value=None
+# ) -> torch.Tensor:
     def forward(
-    self,
-    hidden_states: torch.Tensor,
-    past_key_value=None
-) -> torch.Tensor:
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.LongTensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_value: Optional[Cache] = None,
+        output_attentions: bool = False,
+        use_cache: bool = False,
+        cache_position: Optional[torch.LongTensor] = None,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        output_attentions = False
+
+        # bsz, q_len, _ = hidden_states.size()
         bsz, q_len = hidden_states[-2], hidden_states[-1]
     
     
@@ -164,46 +181,91 @@ class QLlamaAttention(nn.Module):
         key_states = self.k_proj(hidden_states).view(bsz, q_len, self.num_heads, self.head_dim).contiguous()
         value_states = self.v_proj(hidden_states).view(bsz, q_len, self.num_heads, self.head_dim).contiguous()
 
-        if past_key_value is not None:
-            seqlens = [q_len] * bsz
-            x_indptr = torch.tensor([0] + [q_len * (i + 1) for i in range(bsz)], dtype=torch.int32, device=query_states.device)
-            seq_lens = torch.tensor(seqlens, dtype=torch.int32, device=query_states.device)
-            batch_indices, positions = flashinfer.get_batch_indices_positions(
-                x_indptr, seq_lens, bsz * q_len
-            )
-            flashinfer.append_paged_kv_cache(
-                key_states.view(-1, self.num_heads, self.head_dim),
-                value_states.view(-1, self.num_heads, self.head_dim),
-                batch_indices,
-                positions,
-                past_key_value[self.layer_idx]["layer_buf"],
-                past_key_value[self.layer_idx]["kv_indices"],
-                past_key_value[self.layer_idx]["kv_indptr"],
-                past_key_value[self.layer_idx]["kv_last_page_len"],
-                "NHD"
-            )
+        # if past_key_value is not None:
+        #     seqlens = [q_len] * bsz
+        #     x_indptr = torch.tensor([0] + [q_len * (i + 1) for i in range(bsz)], dtype=torch.int32, device=query_states.device)
+        #     seq_lens = torch.tensor(seqlens, dtype=torch.int32, device=query_states.device)
+        #     batch_indices, positions = flashinfer.get_batch_indices_positions(
+        #         x_indptr, seq_lens, bsz * q_len
+        #     )
+        #     flashinfer.append_paged_kv_cache(
+        #         key_states.view(-1, self.num_heads, self.head_dim),
+        #         value_states.view(-1, self.num_heads, self.head_dim),
+        #         batch_indices,
+        #         positions,
+        #         past_key_value[self.layer_idx]["layer_buf"],
+        #         past_key_value[self.layer_idx]["kv_indices"],
+        #         past_key_value[self.layer_idx]["kv_indptr"],
+        #         past_key_value[self.layer_idx]["kv_last_page_len"],
+        #         "NHD"
+        #     )
 
   
-        stack_attn_output = []
-        for i in range(bsz):
-            # print
-            o = flashinfer.single_prefill_with_kv_cache(query_states[i], key_states[i], value_states[i], causal=True, pos_encoding_mode="ROPE_LLAMA") # append attention with LLaMA style RoPE on-the-fly, apply causal mask
-            stack_attn_output.append(o)
+        # stack_attn_output = []
+        # for i in range(bsz):
+        #     # print
+        #     o = flashinfer.single_prefill_with_kv_cache(query_states[i], key_states[i], value_states[i], causal=True, pos_encoding_mode="ROPE_LLAMA") # append attention with LLaMA style RoPE on-the-fly, apply causal mask
+        #     stack_attn_output.append(o)
         
-        if len(stack_attn_output) == 1:
-            attn_output = stack_attn_output[0]
+        # if len(stack_attn_output) == 1:
+        #     attn_output = stack_attn_output[0]
+        # else:
+        #     attn_output = torch.cat(stack_attn_output, dim=0)
+        # attn_output = attn_output.reshape(bsz*q_len, -1).contiguous()
+
+        query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim)
+        key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim)
+        value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim)
+
+        kv_seq_len = key_states.shape[1]
+        kv_seq_len += past_key_value.get_usable_length(kv_seq_len, self.layer_idx)
+        cos, sin = self.rotary_emb(value_states, position_ids=position_ids)
+        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids, unsqueeze_dim=2)
+
+        past_key_value = getattr(self, "past_key_value", past_key_value)
+        assert past_key_value is not None
+        # sin and cos are specific to RoPE models; position_ids needed for the static cache
+        
+        cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position, "attention_mask": attention_mask}
+        cache_out = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
+        
+
+        dropout_rate = self.attention_dropout if self.training else 0.0
+
+        assert self.is_causal
+
+        if isinstance(cache_out, tuple):
+            key_states, value_states = cache_out
+            # attn_output = self._flash_attention_forward(
+            #     query_states, 
+            #     key_states, 
+            #     value_states, 
+            #     query_length=q_len, 
+            #     attention_mask=attention_mask
+            # ).contiguous()
+            attn_output = torch.nn.functional.scaled_dot_product_attention(
+                query_states,
+                key_states,
+                value_states,
+                attn_mask=attention_mask,
+                dropout_p=self.attention_dropout if self.training else 0.0,
+                is_causal=self.is_causal
+            ).contiguous()
         else:
-            attn_output = torch.cat(stack_attn_output, dim=0)
-        attn_output = attn_output.reshape(bsz*q_len, -1).contiguous()
+            attn_output = cache_out(query_states).contiguous()
 
         # output projection
         torch.cuda.nvtx.range_push("qkvo")
         # (AN, AS, AO, SFAN, SFAS, SFAO)
+        attn_output = attn_output.reshape(bsz*q_len, -1).contiguous()
         A, SFA = agemm.reorder_quantize_x(attn_output, self.o_proj.reorder_index, self.o_proj.select_num)
         attn_output = self.o_proj((A, SFA, bsz, q_len)).reshape(bsz, q_len, -1)
         torch.cuda.nvtx.range_pop()
     
-        return attn_output, past_key_value
+        if not output_attentions:
+            attn_weights = None
+
+        return attn_output, attn_weights, past_key_value
 
 
 class LlamaRMSNorm(nn.Module):
@@ -253,10 +315,10 @@ class LlamaDecoderLayer(nn.Module):
         nameTemplate = 'layers.{}.{}.{}.{}'
         self.hidden_size = config.hidden_size
         self.self_attn = QLlamaAttention(
-            config,
+            config=config,
+            layer_idx=layer_idx,
             select_nums=select_nums,
             reorder_index=reorder_index,
-            i=layer_idx
         )
         # self.self_attn = LlamaAttention(config=config, layer_idx=layer_idx)
         self.mlp = QLlamaMLP(
@@ -275,10 +337,16 @@ class LlamaDecoderLayer(nn.Module):
         )
 
     def forward(
-      self,
-      hidden_states: torch.Tensor,
-      past_key_value=None
-  ) -> torch.Tensor:
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_value: Optional[Tuple[torch.Tensor]] = None,
+        output_attentions: Optional[bool] = False,
+        use_cache: Optional[bool] = False,
+        cache_position: Optional[torch.LongTensor] = None,
+        **kwargs,
+    ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         residual = hidden_states
 
         torch.cuda.nvtx.range_push("input_norm")
@@ -287,7 +355,15 @@ class LlamaDecoderLayer(nn.Module):
 
         # Self Attention
         torch.cuda.nvtx.range_push("LlamaAttention")
-        hidden_states, past_key_value = self.self_attn(hidden_states, past_key_value)
+        hidden_states, attn_weights, past_key_value = self.self_attn(
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_value=past_key_value,
+            output_attentions=output_attentions,
+            use_cache=use_cache,
+            cache_position=cache_position,
+        )
         torch.cuda.nvtx.range_pop()
         torch.cuda.nvtx.range_push("r")
         hidden_states = residual + hidden_states
@@ -352,74 +428,86 @@ class LlamaModel(LlamaPreTrainedModel):
 
         self.norm = FP16LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         
-        self.cache_dtype = "bfloat16"
+        self.cache_dtype = "int4"
         self.config = config
         self.page_len = 128
         self.head_dim = config.hidden_size // config.num_heads
+        self._expected_max_length = None
+    def build_cache(self, batch_size, page_size, max_length):
+        device = 'cuda'
+        dtype = self.cache_dtype
+        
+        num_heads = self.config.num_key_value_heads
+        model_dim = self.config.hidden_size
+        head_dim = model_dim // num_heads
+        disable_quant = self.cache_dtype == "float16"
+        return MultiLayerPagedKVCache4Bit(
+            batch_size=batch_size,
+            page_size=page_size, 
+            max_seq_len=max_length, 
+            device=device, 
+            n_layers=len(self.layers),
+            num_heads=num_heads,
+            head_dim=head_dim,
+            disable_quant=disable_quant,
+            hadamard_dtype=None if disable_quant else torch.float16
+        )
+    def _get_logits_processor(self, generation_config, *args, **kwargs):
+        # This is a hack to get the max length from generation_config.
+        # Doing it here because max_length might not be set before this 
+        # method is called.
+        self._expected_max_length = generation_config.max_length # This value will be reset at the next forward call
+        return super()._get_logits_processor(generation_config, *args, **kwargs)
     def forward(
-      self,
-      input_ids: torch.Tensor,
-      past_key_value=None
-    ) -> torch.Tensor:
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_value: Optional[Cache] = None,
+        use_cache: Optional[bool] = None,
+        # ...可以根据需要添加其他参数
+    ) -> Tuple[torch.Tensor, Optional[Cache]]:
+    
         torch.cuda.nvtx.range_push(f"embed")
         hidden_states = self.embed_tokens(input_ids)
         torch.cuda.nvtx.range_pop()
         hidden_states = hidden_states.to(torch.bfloat16)
-        bsz, q_len, _ = hidden_states.shape
+
+        if position_ids is None:
+            # 获取 input_ids 的设备和形状
+            device = input_ids.device
+            batch_size, seq_length = input_ids.shape
+            # 创建 position_ids 张量，形状为 (batch_size, seq_length)
+            # 值为 [[0, 1, 2, ...], [0, 1, 2, ...], ...]
+            position_ids = torch.arange(
+                0, seq_length, dtype=torch.long, device=device
+            ).unsqueeze(0).expand(batch_size, -1)
         
         if past_key_value is None:
-            # 初始化 KV Cache 张量（仅在第一次调用时）
-            device = hidden_states.device
-            max_seq_len = getattr(self, '_expected_max_length', q_len)
-            seqlens = [q_len] * bsz
-            # total_pages = int(256000 / self.page_len)
-            # total_pages = math.ceil(bsz * q_len / self.page_len)
-            num_pages_per_seq = math.ceil(max_seq_len / self.page_len)
-            total_pages = bsz * num_pages_per_seq
-            layer_buf = torch.empty(
-            (total_pages, 2, self.page_len, self.config.num_heads, self.head_dim),
-            dtype=torch.bfloat16,
-            device="cuda"
+            max_length = self._expected_max_length or input_ids.shape[1]
+            self._expected_max_length = None
+            past_key_value = self.build_cache(
+                input_ids.shape[0], 
+                page_size=max_length,
+                max_length=max_length
             )
-            kv_indices_host = []
-            kv_indptr_host = [0]
-            next_page_id = 0
-            for seqlen in seqlens:
-                npages = (seqlen + self.page_len - 1) // self.page_len
-                kv_indices_host.extend(range(next_page_id, next_page_id + npages))
-                next_page_id += npages
-                kv_indptr_host.append(len(kv_indices_host))
-            kv_indices = torch.tensor(kv_indices_host, device=device, dtype=torch.int32)
-            kv_indptr = torch.tensor(kv_indptr_host, device=device, dtype=torch.int32)
-            # kv_indices = torch.arange(total_pages, dtype=torch.int32, device=hidden_states.device)
-            # kv_indptr = torch.tensor([0, 1], dtype=torch.int32, device=hidden_states.device)
-            kv_last_page_len = torch.tensor([(seqlen - 1) % self.page_len + 1 for seqlen in seqlens], dtype=torch.int32, device=hidden_states.device)
-            past_key_value = []
-            for i in range(self.config.num_hidden_layers):
-                # 为每一层创建一个独立的 buffer
-                layer_buf = torch.empty(
-                    (total_pages, 2, self.page_len, self.config.num_heads, self.head_dim),
-                    dtype=torch.bfloat16,
-                    device="cuda"
-                )
-                # ... （kv_indices 等可以共享，因为它们的结构是一样的）
-                past_key_value.append({
-                    "layer_buf": layer_buf,
-                    "kv_indices": kv_indices,
-                    "kv_indptr": kv_indptr,
-                    "kv_last_page_len": kv_last_page_len,
-                })
     
+        # 这是最关键的修改：在循环中把所有参数都传给 decoder_layer
         for layer_idx, decoder_layer in enumerate(self.layers):
             torch.cuda.nvtx.range_push(f"layer={layer_idx}")
-            # print(hidden_states.dtype)
-            hidden_states, past_key_value = decoder_layer(hidden_states, past_key_value)
+            hidden_states, past_key_value = decoder_layer(
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_value=past_key_value,
+                use_cache=use_cache,
+            )
             torch.cuda.nvtx.range_pop()
-
+    
         torch.cuda.nvtx.range_push("lastnorm")
         hidden_states = self.norm(hidden_states)
         torch.cuda.nvtx.range_pop()
-
+    
         return hidden_states, past_key_value
 
 
@@ -439,12 +527,22 @@ class LlamaForCausalLM(LlamaPreTrainedModel): # 通常CausalLM直接继承PreTra
     def forward(
         self,
         input_ids: torch.Tensor,
-        past_key_value=None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        # 调用骨干 LlamaModel 的 forward
-        hidden_states, past_key_value = self.model(input_ids, past_key_value)
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_value: Optional[Cache] = None, # HuggingFace 中通常用 past_key_values (复数)
+        use_cache: Optional[bool] = None,
+        # ...可以根据需要添加其他参数
+    ) -> Tuple[torch.Tensor, Optional[Cache]]:
+        hidden_states, past_key_value = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_value=past_key_value,
+            use_cache=use_cache
+        )
         
         logits = self.lm_head(hidden_states.to(torch.bfloat16))
         
-        # 返回 past_key_value (根据您的原代码)
-        return past_key_value 
+        # 注意：标准的CausalLM模型会同时返回logits和past_key_value
+        # 您的代码只返回了 past_key_value，这可能会导致其他问题，建议一起返回
+        return past_key_value

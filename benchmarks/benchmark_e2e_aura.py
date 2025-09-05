@@ -78,8 +78,8 @@ MODEL_CFGS = {
 
 
 benchmark_dtypes = ["int4", torch.float16]
-num_warmup_steps = 2
-num_bench_steps = 4
+num_warmup_steps = 1
+num_bench_steps = 1
 
 def repeated_run(num_repeats=10):
     def func(module):
@@ -142,14 +142,14 @@ def run_prefill(model, bsz, prefill_length, config):
 def run_decode(model, bsz, prefill_length, decode_steps):
     device = 'cuda'
     test_input = torch.randint(100, 200, (bsz, prefill_length), dtype=torch.int32, device=device)
-    model._expected_max_length = prefill_length + decode_steps
+    model.model._expected_max_length = prefill_length + decode_steps
     out = model(test_input)
     past_key_value = out
     del out
     _cleanup()
     next_input = torch.tensor([[100] for _ in range (bsz)], dtype=torch.int32, device=device)
     def _decode_for_multiple_steps():
-        # past_key_value.length = prefill_length
+        past_key_value.length = prefill_length
         for _ in range(decode_steps):
             model(next_input, past_key_value=past_key_value)
     return module_benchmark(_decode_for_multiple_steps)
@@ -159,7 +159,7 @@ def run_e2e(model, bsz, prefill_length, decode_steps):
     test_input = torch.randint(100, 200, (bsz, prefill_length), dtype=torch.int32, device=device)
     next_input = torch.tensor([[100] for _ in range (bsz)], dtype=torch.int32, device=device)
     def _prefill_and_decode_for_multiple_steps():
-        model._expected_max_length = prefill_length + decode_steps
+        model.model._expected_max_length = prefill_length + decode_steps
         out = model(test_input)
         for _ in range(decode_steps):
             model(next_input, past_key_value=out)
