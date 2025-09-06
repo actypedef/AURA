@@ -1,4 +1,0 @@
-rich
-accelerate
-stop-sequencer
-evalplus==0.2.1

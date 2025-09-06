@@ -60,7 +60,7 @@ def main():
     _, inps = get_wikitext2(
                 nsamples=args.samples, seed=0, tokenizer=enc, seqlen=args.seqlen
             )
-    select_num, average_bits = search_select_proportions(model, inps, "cuda", args.seqlen, reorder_index, act_scales)
+    select_num, average_bits = search_select_proportions(model, inps, "cuda:0", args.seqlen, reorder_index, act_scales)
     print(time.time()-start_time)
 
     torch.save(reorder_index, f'./saved/{model_name.lower()}_reorder_index_wikitext2_{args.act_sort_metric}.pt')

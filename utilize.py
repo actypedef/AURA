@@ -214,111 +214,34 @@ def get_wikitext2(nsamples, seed, seqlen, tokenizer):
 
 @torch.no_grad()
 def search_select_proportions(model, dataloader, device_, seqlen, reorder_index, hessian):
-    nsamples = len(dataloader)
-    device = device_
-    
+    """
+    完全静态地分析模型结构，无需数据和前向传播
+    """
     select_nums = {}
     average_bits = {}
-   
-    def stat_input_hook(m, x, y, name):
-        if isinstance(x, tuple):
-            x = x[0]
-            assert isinstance(x, torch.Tensor)
-        if isinstance(y, tuple):
-            y = y[0]
-            assert isinstance(y, torch.Tensor)
-        act_scales[name+".input"] = x
-        act_scales[name+".output"] = y
-     
-    hooks = []
+
     for name, m in model.model.named_modules():
-        if isinstance(m, nn.Linear):
-            hooks.append(
-                m.register_forward_hook(
-                    functools.partial(stat_input_hook, name=name)
-                )
-            )
-
-    layers = model.model.layers
-    model.model.embed_tokens = model.model.embed_tokens.to(device)
-    if not model.model.norm.weight.is_meta:
-        model.model.norm = model.model.norm.to(device)
-    layers[0] = layers[0].to(device)
-
-    dtype = next(iter(model.parameters())).dtype
-    inps = torch.zeros(
-        (nsamples, seqlen, model.config.hidden_size), dtype=dtype, device=device
-    )
-    cache = {'attention_mask': None}
-
-    class Catcher(nn.Module):
-        def __init__(self, module):
-            super().__init__()
-            self.module = module
-            self.self_attn = module.self_attn
-        def forward(self, inp, **kwargs):
-            cache['inps'] = inp
-            cache['attention_mask'] = kwargs['attention_mask']
-            cache['position_ids'] = kwargs['position_ids']
-            raise ValueError
-    layers[0] = Catcher(layers[0])
-    model.to(device)
-
-    dataloader = torch.stack(dataloader, dim=0).squeeze(1)
-
-    try:
-        model(torch.tensor(dataloader).to(device))
-    except ValueError:
-        pass
-
-    
-    layers[0] = layers[0].module
-    layers[0] = layers[0].cpu()
-    model.model.embed_tokens = model.model.embed_tokens.cpu()
-    if not model.model.norm.weight.is_meta:
-        model.model.norm = model.model.norm.cpu()
-    torch.cuda.empty_cache()
-
-    inps = cache['inps']
-  
-    attention_mask = cache['attention_mask']
-    position_ids = cache['position_ids']
-  
-    for i in tqdm(range(len(layers))):
-        act_scales = {}
-        layer = layers[i].to(device)
-  
-        inps = layer(inps, attention_mask=attention_mask, position_ids=position_ids)[0]
-       
-        for name, keys in act_scales.items():
-            if 'output' in name:
+        if 'output' in name:
                 continue
-                
-            keys = keys.reshape(-1, keys.shape[-1]).contiguous()
-            seqlen, in_features = keys.shape 
-     
+        # 如果模块是线性层
+        if isinstance(m, nn.Linear):
+            # 获取其输入特征维度
+            in_features = m.in_features
+            
+            # 执行你的计算逻辑
             select_ratio = 0.04
             select_num = math.ceil(in_features * select_ratio / 64) * 64
-            average_bits[name] = 9 * select_ratio + 4.5 * (1.0 - select_ratio)
             
-            print(f'select_num is {select_ratio}, avg:{average_bits[name]}')
-            select_nums[name] = select_num
+            # 我们要统计的是线性层的输入，所以给名字加上后缀 ".input"
+            # 这里的 `name` 已经和您原始代码中的 `name` 完全一样了
+            dict_key = name + ".input"
+            
+            average_bits[dict_key] = 9 * select_ratio + 4.5 * (1.0 - select_ratio)
+            select_nums[dict_key] = select_num
 
-            del keys
-            
-            gc.collect()
-            torch.cuda.empty_cache()
-            
-        
-        
-        layer.cpu()
-        del act_scales
-        del layer
-        gc.collect()
-        torch.cuda.empty_cache()
-            
-
-    for h in hooks:
-        h.remove()
+    # (可选) 打印一些输出来验证
+    # for i in range(5):
+    #     key_example = list(select_nums.keys())[i]
+    #     print(f"Generated Key Example: {key_example}, Select Num: {select_nums[key_example]}")
 
     return select_nums, average_bits

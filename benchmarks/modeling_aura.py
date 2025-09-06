@@ -214,8 +214,8 @@ class QLlamaAttention(LlamaFlashAttention2):
         # attn_output = attn_output.reshape(bsz*q_len, -1).contiguous()
 
         query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim)
-        key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim)
-        value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim)
+        key_states = key_states.view(bsz, q_len, self.num_heads, self.head_dim)
+        value_states = value_states.view(bsz, q_len, self.num_heads, self.head_dim)
 
         kv_seq_len = key_states.shape[1]
         kv_seq_len += past_key_value.get_usable_length(kv_seq_len, self.layer_idx)
@@ -437,7 +437,7 @@ class LlamaModel(LlamaPreTrainedModel):
         device = 'cuda'
         dtype = self.cache_dtype
         
-        num_heads = self.config.num_key_value_heads
+        num_heads = self.config.num_heads
         model_dim = self.config.hidden_size
         head_dim = model_dim // num_heads
         disable_quant = self.cache_dtype == "float16"
@@ -513,6 +513,7 @@ class LlamaModel(LlamaPreTrainedModel):
 
 class LlamaForCausalLM(LlamaPreTrainedModel): # 通常CausalLM直接继承PreTrainedModel
     def __init__(self, name, config, layer_idx=None):
+
         super().__init__(config) # 继承 PreTrainedModel，它会处理 config 和一些通用初始化
 
         # LlamaForCausalLM 应该包含一个 LlamaModel 实例作为其骨干
@@ -523,6 +524,7 @@ class LlamaForCausalLM(LlamaPreTrainedModel): # 通常CausalLM直接继承PreTra
         
         self.post_init()
         self.config = config
+        print(config)
 
     def forward(
         self,

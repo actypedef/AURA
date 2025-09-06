@@ -16,6 +16,7 @@ class ModelConfig:
     name: str
     num_layers: int
     num_heads: int
+    num_key_value_heads: int
     hidden_size: int
     intermediate_size: int
     attention_bias: False
@@ -29,6 +30,7 @@ MODEL_CFGS = {
             name='qwen2.5-7b',
             num_layers=28,
             num_heads=28,
+            num_key_value_heads=4,
             hidden_size=3584,
             intermediate_size=18944,
             attention_bias=True,
@@ -39,8 +41,20 @@ MODEL_CFGS = {
             name='llama-2-7b',
             num_layers=32,
             num_heads=32,
+            num_key_value_heads=32,
             hidden_size=4096,
             intermediate_size=11008,
+            attention_bias=False,
+            mlp_bias=False
+        ),
+    "llama-2-13b":
+        ModelConfig(
+            name='llama-2-13b',
+            num_layers=40,
+            num_heads=40,
+            num_key_value_heads=40,
+            hidden_size=5120,
+            intermediate_size=13824,
             attention_bias=False,
             mlp_bias=False
         ),
@@ -49,6 +63,7 @@ MODEL_CFGS = {
             name='llama-3.1-8b',
             num_layers=32,
             num_heads=32,
+            num_key_value_heads=8,
             hidden_size=4096,
             intermediate_size=14336,
             attention_bias=False,
@@ -59,6 +74,7 @@ MODEL_CFGS = {
             name='qwen2.5-14b',
             num_layers=48,
             num_heads=40,
+            num_key_value_heads=8,
             hidden_size=5120,
             intermediate_size=13824,
             attention_bias=True,
@@ -69,6 +85,7 @@ MODEL_CFGS = {
             name='qwen2.5-32b',
             num_layers=64,
             num_heads=40,
+            num_key_value_heads=8,
             hidden_size=5120,
             intermediate_size=27648,
             attention_bias=True,
@@ -123,6 +140,8 @@ def get_model_quantized(name, model_cfg):
         LlamaConfig(
             hidden_size=model_cfg.hidden_size,
             num_heads=model_cfg.num_heads,
+            num_attention_heads=model_cfg.num_heads,
+            num_key_value_heads=model_cfg.num_key_value_heads,
             intermediate_size=model_cfg.intermediate_size,
             num_hidden_layers=model_cfg.num_layers,
         )).to(model_cfg.device)
