@@ -156,7 +156,7 @@ def get_act_stats(model, dataloader, device_, metric='mean', seqlen=2048):
             cache['position_ids'] = kwargs['position_ids']
             raise ValueError
     layers[0] = Catcher(layers[0])
-    model.to(device)
+    # model.to(device)
     for batch in dataloader:
         try:
             model(batch[0].to(device))

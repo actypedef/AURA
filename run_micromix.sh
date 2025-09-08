@@ -8,7 +8,7 @@ export CUDA_VISIBLE_DEVICE="0"
 # zero-shot
 python ${dir}/model/main.py ${MODEL} \
         --act_sort_metric frobenius\
-        --tasks piqa,arc_challenge,boolq,hellaswag,winogrande,lambada_openai \
+        --tasks piqa,arc_challenge,arc_easy,boolq,hellaswag,winogrande,lambada_openai \
         --lm_eval_num_fewshot 0 \
         --lm_eval_limit -1\
 

@@ -23,13 +23,7 @@ pip install -r requirements.txt
 
 ## 2. Usage
 
-### 2.1 Preprocessing
-Reorder_indices, select_num are needed for quantization:
-```bash
-python reorder_indices.py --model /PATH/TO/YOUR/MODEL/ --samples 32 --seqlen 2048 --act_sort_metric frobenius
-```
-Results are saved in ./saved/
-### 2.2 Building Kernels
+### 2.1 Building Kernels
 ```bash
 sudo apt-get update
 sudo apt-get install python3-dev
@@ -42,6 +36,13 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 cd kernels/
 bash remake.sh
 ```
+### 2.2 Preprocessing
+Reorder_indices, select_num are needed for quantization:
+```bash
+python reorder_indices.py --model /PATH/TO/YOUR/MODEL/ --samples 32 --seqlen 2048 --act_sort_metric frobenius
+```
+Results are saved in ./saved/
+
 ### 2.3 Accuracy Evaluation
 ```bash
 bash run_micromix.sh /PATH/TO/YOUR/MODEL/

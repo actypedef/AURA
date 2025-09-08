@@ -114,7 +114,7 @@ if __name__ == '__main__':
 
 
     print(model)
-    bsz = 4
+    bsz = "auto"
     if args.tasks is not None:
         if 'mmlu' in args.tasks :
             bsz = 1
