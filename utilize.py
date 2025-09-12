@@ -252,45 +252,59 @@ def get_c4(nsamples, seed, seqlen, tokenizer):
     return trainloader, inps
 
 
-def get_pile(nsamples, seed, seqlen, tokenizer):
-    from datasets import load_dataset
+def get_humaneval(nsamples, seed, seqlen, tokenizer):
+    """
+    加载 openai_humaneval 数据集。
+    
+    我们使用官方的 'humaneval' Python 包来加载数据，
+    这是最稳定可靠的方式，可以避免 'datasets' 库的内部处理错误。
+    """
     import random
+    
+    try:
+        # 步骤 1: 使用官方包提供的函数来读取数据
+        from human_eval.data import read_problems
+        problems = read_problems()  # 这会返回一个字典 {'task_id': problem_dict}
+        # 步骤 2: 我们只需要问题字典的列表
+        dataset = list(problems.values())
+    except ImportError:
+        # 如果用户没有安装包，给出清晰的提示
+        print("=" * 80)
+        print("错误: 'humaneval' Python 包未安装。")
+        print("请在终端运行 'pip install humaneval' 来安装它。")
+        print("=" * 80)
+        return [], []
+    except Exception as e:
+        print(f"使用 'humaneval' 包加载数据失败, 错误: {e}")
+        return [], []
 
-    dataset = load_dataset(
-        'EleutherAI/the_pile', 'all', 
-        split='train', 
-        streaming=True, 
-        trust_remote_code=True
-    )
-    shuffled_dataset = dataset.shuffle(buffer_size=10000, seed=seed)
+    # 从这里开始，后续逻辑和之前完全一样
+    # 将所有 prompt 拼接成一个长文本
+    text_corpus = "\n\n".join([sample['prompt'] for sample in dataset])
+    trainenc = tokenizer(text_corpus, return_tensors='pt')
 
+    random.seed(seed)
     trainloader = []
     inps = []
-    for data in shuffled_dataset:
-        if len(inps) == nsamples:
-            break
-
-        text = data.get('text', '')
-        if not text:
-            continue
-            
-        enc = tokenizer(text, return_tensors='pt')
-
-        if enc.input_ids.shape[1] >= seqlen:
-            i = random.randint(0, enc.input_ids.shape[1] - seqlen - 1)
+    for _ in range(nsamples):
+        # 防止整个语料库比一个 seqlen 还短
+        if trainenc.input_ids.shape[1] <= seqlen:
+            print(f"警告: HumanEval 语料库总长度 ({trainenc.input_ids.shape[1]}) 小于等于 seqlen ({seqlen}).")
+            inp = trainenc.input_ids
+        else:
+            i = random.randint(0, trainenc.input_ids.shape[1] - seqlen - 1)
             j = i + seqlen
-            inp = enc.input_ids[:, i:j]
-            tar = inp.clone()
-            tar[:, :-1] = -100
-            
-            trainloader.append((inp, tar))
-            inps.append(inp)
+            inp = trainenc.input_ids[:, i:j]
 
-    if len(inps) < nsamples:
-        print(f"警告: 仅找到 {len(inps)} 个长度大于等于 {seqlen} 的样本。")
-            
+        tar = inp.clone()
+        tar[:, :-1] = -100
+        trainloader.append((inp, tar))
+        inps.append(inp)
+        
+        if trainenc.input_ids.shape[1] <= seqlen:
+            break  # 如果语料库太短，只生成一个样本后就退出
+
     return trainloader, inps
-
 
 @torch.no_grad()
 def search_select_proportions(model, device_, seqlen, reorder_index, hessian):
