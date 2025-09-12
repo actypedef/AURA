@@ -156,7 +156,7 @@ def get_act_stats(model, dataloader, device_, metric='mean', seqlen=2048):
             cache['position_ids'] = kwargs['position_ids']
             raise ValueError
     layers[0] = Catcher(layers[0])
-    # model.to(device)
+    model.to(device)
     for batch in dataloader:
         try:
             model(batch[0].to(device))
@@ -211,9 +211,89 @@ def get_wikitext2(nsamples, seed, seqlen, tokenizer):
         inps.append(inp)
     return trainloader, inps 
 
+def get_c4(nsamples, seed, seqlen, tokenizer):
+    from datasets import load_dataset
+    import random
+
+    dataset = load_dataset(
+        'allenai/c4', 'en', 
+        split='train', 
+        streaming=True, 
+        trust_remote_code=True
+    )
+    
+    shuffled_dataset = dataset.shuffle(buffer_size=10000, seed=seed)
+
+    trainloader = []
+    inps = []
+    for data in shuffled_dataset:
+        if len(inps) == nsamples:
+            break
+
+        text = data.get('text', '')
+        if not text:
+            continue
+
+        enc = tokenizer(text, return_tensors='pt')
+
+        if enc.input_ids.shape[1] >= seqlen:
+            i = random.randint(0, enc.input_ids.shape[1] - seqlen - 1)
+            j = i + seqlen
+            inp = enc.input_ids[:, i:j]
+            tar = inp.clone()
+            tar[:, :-1] = -100
+            
+            trainloader.append((inp, tar))
+            inps.append(inp)
+            
+    if len(inps) < nsamples:
+        print(f"警告: 仅找到 {len(inps)} 个长度大于等于 {seqlen} 的样本。")
+
+    return trainloader, inps
+
+
+def get_pile(nsamples, seed, seqlen, tokenizer):
+    from datasets import load_dataset
+    import random
+
+    dataset = load_dataset(
+        'EleutherAI/the_pile', 'all', 
+        split='train', 
+        streaming=True, 
+        trust_remote_code=True
+    )
+    shuffled_dataset = dataset.shuffle(buffer_size=10000, seed=seed)
+
+    trainloader = []
+    inps = []
+    for data in shuffled_dataset:
+        if len(inps) == nsamples:
+            break
+
+        text = data.get('text', '')
+        if not text:
+            continue
+            
+        enc = tokenizer(text, return_tensors='pt')
+
+        if enc.input_ids.shape[1] >= seqlen:
+            i = random.randint(0, enc.input_ids.shape[1] - seqlen - 1)
+            j = i + seqlen
+            inp = enc.input_ids[:, i:j]
+            tar = inp.clone()
+            tar[:, :-1] = -100
+            
+            trainloader.append((inp, tar))
+            inps.append(inp)
+
+    if len(inps) < nsamples:
+        print(f"警告: 仅找到 {len(inps)} 个长度大于等于 {seqlen} 的样本。")
+            
+    return trainloader, inps
+
 
 @torch.no_grad()
-def search_select_proportions(model, dataloader, device_, seqlen, reorder_index, hessian):
+def search_select_proportions(model, device_, seqlen, reorder_index, hessian):
     """
     完全静态地分析模型结构，无需数据和前向传播
     """

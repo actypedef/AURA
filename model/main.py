@@ -77,6 +77,10 @@ if __name__ == '__main__':
         "--lm_eval_limit", type=int, default=-1, 
         help="Limit the number of examples in lm evaluation"
     )
+    parser.add_argument(
+        "--dataset", type=str, default="wikitext2", choices=["wikitext2", "c4", "pile"], 
+        help="The calibration dataset to use."
+    )
   
     
     args = parser.parse_args()
@@ -95,9 +99,10 @@ if __name__ == '__main__':
     model.eval()
 
     import os
-  
-    index_filename = f'./saved/{model_name.lower()}_reorder_index_wikitext2_{args.act_sort_metric}.pt'
-    select_num_filename = f'./saved/{model_name.lower()}_select_num_wikitext2_{args.act_sort_metric}.pt'
+
+    dataset_name = args.dataset.lower()
+    index_filename = f'./saved/{model_name.lower()}_reorder_index_{dataset_name}_{args.act_sort_metric}.pt'
+    select_num_filename = f'./saved/{model_name.lower()}_select_num_{dataset_name}_{args.act_sort_metric}.pt'
  
     
     assert os.path.isfile(index_filename), "reorder index file not found."
