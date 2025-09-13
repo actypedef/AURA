@@ -150,7 +150,7 @@ std::tuple<torch::Tensor, torch::Tensor> reorder_quantize_w(
         );
     }
     else if (KQ == 8192) { //Llama
-        run_reorder_w_bf16_nvfp4<16, 4096>(
+        run_reorder_w_bf16_nvfp4<16, 8192>(
             (cutlass::bfloat16_t *)W.data_ptr<at::BFloat16>(), N, reorder_index.data_ptr<int16_t>(), 
             QW.data_ptr<uint8_t>(), reinterpret_cast<cutlass::float_ue4m3_t *>(SFW.data_ptr<uint8_t>()), 
             KQ, KE
