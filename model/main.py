@@ -111,14 +111,16 @@ if __name__ == '__main__':
     reorder_index = torch.load(index_filename, weights_only=False)
     select_nums = torch.load(select_num_filename, weights_only=False)
     
-  
+    torch.cuda.reset_max_memory_allocated()
     print("Reordering model...")
     model = reorder_model_func(
         model, device=DEV, kv_cache=args.kv_cache, reorder_index=reorder_index, select_nums=select_nums
     )
+    peak_memory = torch.cuda.max_memory_allocated()
 
 
     print(model)
+    print(f"Quantized Model Size: {peak_memory/(1024*1024*1024):.2f} GB")
     bsz = "auto"
     if args.tasks is not None:
         if 'mmlu' in args.tasks :
