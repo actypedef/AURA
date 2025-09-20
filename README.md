@@ -1,5 +1,8 @@
 # 😇AURA: Augmented Representation for Unified Accuracy-aware Quantization
 
+
+![aura](results/aura.png)
+
 AURA is a quantization method that quantizes both weight and activation to low-bit augmented matrices. 
 
 
