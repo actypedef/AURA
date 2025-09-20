@@ -12,6 +12,8 @@ from lm_eval.tasks import TaskManager
 from lm_eval.utils import make_table
 from lm_eval.models.huggingface import HFLM
 
+import time
+
 
 def get_llama(model):
     import torch
@@ -113,14 +115,17 @@ if __name__ == '__main__':
     
     torch.cuda.reset_max_memory_allocated()
     print("Reordering model...")
+    start_time=time.time()
     model = reorder_model_func(
         model, device=DEV, kv_cache=args.kv_cache, reorder_index=reorder_index, select_nums=select_nums
     )
+    end_time=time.time()
     peak_memory = torch.cuda.max_memory_allocated()
 
 
     print(model)
     print(f"Quantized Model Size: {peak_memory/(1024*1024*1024):.2f} GB")
+    print(f"Total time taken: {end_time - start_time:.2f} seconds")
     bsz = "auto"
     if args.tasks is not None:
         if 'mmlu' in args.tasks :
