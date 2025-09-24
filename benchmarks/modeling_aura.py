@@ -13,7 +13,7 @@ from transformers.models.llama.modeling_llama import (ACT2FN,
 )
 from transformers import Cache
 
-import flashinfer
+# import flashinfer
 
 import sys
 sys.path.append('./kernels/build/')

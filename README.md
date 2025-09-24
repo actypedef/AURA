@@ -43,6 +43,7 @@ bash remake.sh
 This might take a few minutes.
 
 ### 2.2 Preprocessing
+
 Reorder_indices, select_num are needed for quantization:
 ```bash
 python reorder_indices.py --model /PATH/TO/YOUR/MODEL/ --samples 32 --seqlen 2048 --act_sort_metric frobenius
@@ -55,11 +56,7 @@ bash run_micromix.sh /PATH/TO/YOUR/MODEL/
 ```
 
 ## 3. Efficiency Evaluation
-Since [FlashInfer](https://github.com/flashinfer-ai/flashinfer/tree/main) is integrated into our decoderlayer implementation, please install FlashInfer:
-```bash
-cd third-party/flashinfer/
-python -m pip install -v .
-```
+
 End-to-end efficiency:
 ```bash
 python benchmarks/benchmark_e2e_aura.py --model 'llama-2-7b' --batch_size 8 --prefill_seq_len 1024 --decode_steps 50
