@@ -153,8 +153,6 @@ def get_loaders(
     if "llama" in model.lower():
         from transformers import AutoTokenizer 
         tokenizer = AutoTokenizer.from_pretrained(model)
-        # Fix for transformer 4.28.0.dev0 compatibility
-        # See: https://github.com/Vahe1994/SpQR/blob/main/datautils.py#L164
         if tokenizer.bos_token_id != 1 or tokenizer.eos_token_id != 2:
             try:
                 tokenizer.bos_token_id = 1
