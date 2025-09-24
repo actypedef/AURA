@@ -1,6 +1,3 @@
-# Adapted from HuggingFace Transformers Library
-# https://github.com/huggingface/transformers/blob/17a55534f5e5df10ac4804d4270bf6b8cc24998d/src/transformers/models/llama/modeling_llama.py
-
 import math
 from typing import Optional, Tuple
 
@@ -112,7 +109,6 @@ class QLlamaMLP(nn.Module):
     def forward(self, x):   
         bsz, q_len = x[-2], x[-1]
         return self.down_proj(agemm.reorder_quantize_x(self.act_fn(self.gate_proj(x)) * self.up_proj(x), self.down_proj.reorder_index, self.down_proj.select_num)).reshape(bsz, q_len, -1)
-        # return self.down_proj(mixedgemm.activate_quantize_x(self.gate_proj(x), self.up_proj(x), self.down_proj.p4_num, self.down_proj.select_num, self.down_proj.p8_num)).reshape(bsz, q_len, -1)
 
 
     
@@ -155,11 +151,6 @@ class QLlamaAttention(LlamaFlashAttention2):
         )
         self.page_len = 128
         
-#     def forward(
-#     self,
-#     hidden_states: torch.Tensor,
-#     past_key_value=None
-# ) -> torch.Tensor:
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -173,45 +164,12 @@ class QLlamaAttention(LlamaFlashAttention2):
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         output_attentions = False
 
-        # bsz, q_len, _ = hidden_states.size()
         bsz, q_len = hidden_states[-2], hidden_states[-1]
     
     
         query_states = self.q_proj(hidden_states).view(bsz, q_len, self.num_heads, self.head_dim).contiguous()
         key_states = self.k_proj(hidden_states).view(bsz, q_len, self.num_heads, self.head_dim).contiguous()
         value_states = self.v_proj(hidden_states).view(bsz, q_len, self.num_heads, self.head_dim).contiguous()
-
-        # if past_key_value is not None:
-        #     seqlens = [q_len] * bsz
-        #     x_indptr = torch.tensor([0] + [q_len * (i + 1) for i in range(bsz)], dtype=torch.int32, device=query_states.device)
-        #     seq_lens = torch.tensor(seqlens, dtype=torch.int32, device=query_states.device)
-        #     batch_indices, positions = flashinfer.get_batch_indices_positions(
-        #         x_indptr, seq_lens, bsz * q_len
-        #     )
-        #     flashinfer.append_paged_kv_cache(
-        #         key_states.view(-1, self.num_heads, self.head_dim),
-        #         value_states.view(-1, self.num_heads, self.head_dim),
-        #         batch_indices,
-        #         positions,
-        #         past_key_value[self.layer_idx]["layer_buf"],
-        #         past_key_value[self.layer_idx]["kv_indices"],
-        #         past_key_value[self.layer_idx]["kv_indptr"],
-        #         past_key_value[self.layer_idx]["kv_last_page_len"],
-        #         "NHD"
-        #     )
-
-  
-        # stack_attn_output = []
-        # for i in range(bsz):
-        #     # print
-        #     o = flashinfer.single_prefill_with_kv_cache(query_states[i], key_states[i], value_states[i], causal=True, pos_encoding_mode="ROPE_LLAMA") # append attention with LLaMA style RoPE on-the-fly, apply causal mask
-        #     stack_attn_output.append(o)
-        
-        # if len(stack_attn_output) == 1:
-        #     attn_output = stack_attn_output[0]
-        # else:
-        #     attn_output = torch.cat(stack_attn_output, dim=0)
-        # attn_output = attn_output.reshape(bsz*q_len, -1).contiguous()
 
         query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim)
         key_states = key_states.view(bsz, q_len, self.num_heads, self.head_dim)
@@ -224,7 +182,6 @@ class QLlamaAttention(LlamaFlashAttention2):
 
         past_key_value = getattr(self, "past_key_value", past_key_value)
         assert past_key_value is not None
-        # sin and cos are specific to RoPE models; position_ids needed for the static cache
         
         cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position, "attention_mask": attention_mask}
         cache_out = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
@@ -236,13 +193,6 @@ class QLlamaAttention(LlamaFlashAttention2):
 
         if isinstance(cache_out, tuple):
             key_states, value_states = cache_out
-            # attn_output = self._flash_attention_forward(
-            #     query_states, 
-            #     key_states, 
-            #     value_states, 
-            #     query_length=q_len, 
-            #     attention_mask=attention_mask
-            # ).contiguous()
             attn_output = torch.nn.functional.scaled_dot_product_attention(
                 query_states,
                 key_states,
@@ -256,7 +206,6 @@ class QLlamaAttention(LlamaFlashAttention2):
 
         # output projection
         torch.cuda.nvtx.range_push("qkvo")
-        # (AN, AS, AO, SFAN, SFAS, SFAO)
         attn_output = attn_output.reshape(bsz*q_len, -1).contiguous()
         A, SFA = agemm.reorder_quantize_x(attn_output, self.o_proj.reorder_index, self.o_proj.select_num)
         attn_output = self.o_proj((A, SFA, bsz, q_len)).reshape(bsz, q_len, -1)
@@ -282,10 +231,8 @@ class LlamaRMSNorm(nn.Module):
     def forward(self, hidden_states):
         bsz, q_len, _ = hidden_states.shape
         hidden_states = hidden_states.reshape(bsz*q_len, -1).contiguous()
-        # print(self.p4_num, self.select_num, self.p8_num)
         A, SFA = agemm.rmsnorm_quantize_x(hidden_states, self.weight, self.variance_epsilon, self.reorder_index, self.select_num)
         return (A, SFA, bsz, q_len)
-        # return rms_norm(hidden_states, self.weight, self.variance_epsilon)
     
 class FP16LlamaRMSNorm(nn.Module):
 
@@ -320,7 +267,6 @@ class LlamaDecoderLayer(nn.Module):
             select_nums=select_nums,
             reorder_index=reorder_index,
         )
-        # self.self_attn = LlamaAttention(config=config, layer_idx=layer_idx)
         self.mlp = QLlamaMLP(
             config,
             select_nums=select_nums,
@@ -453,10 +399,7 @@ class LlamaModel(LlamaPreTrainedModel):
             hadamard_dtype=None if disable_quant else torch.float16
         )
     def _get_logits_processor(self, generation_config, *args, **kwargs):
-        # This is a hack to get the max length from generation_config.
-        # Doing it here because max_length might not be set before this 
-        # method is called.
-        self._expected_max_length = generation_config.max_length # This value will be reset at the next forward call
+        self._expected_max_length = generation_config.max_length 
         return super()._get_logits_processor(generation_config, *args, **kwargs)
     def forward(
         self,
@@ -465,7 +408,6 @@ class LlamaModel(LlamaPreTrainedModel):
         position_ids: Optional[torch.LongTensor] = None,
         past_key_value: Optional[Cache] = None,
         use_cache: Optional[bool] = None,
-        # ...可以根据需要添加其他参数
     ) -> Tuple[torch.Tensor, Optional[Cache]]:
     
         torch.cuda.nvtx.range_push(f"embed")
@@ -474,11 +416,8 @@ class LlamaModel(LlamaPreTrainedModel):
         hidden_states = hidden_states.to(torch.bfloat16)
 
         if position_ids is None:
-            # 获取 input_ids 的设备和形状
             device = input_ids.device
             batch_size, seq_length = input_ids.shape
-            # 创建 position_ids 张量，形状为 (batch_size, seq_length)
-            # 值为 [[0, 1, 2, ...], [0, 1, 2, ...], ...]
             position_ids = torch.arange(
                 0, seq_length, dtype=torch.long, device=device
             ).unsqueeze(0).expand(batch_size, -1)
@@ -492,7 +431,6 @@ class LlamaModel(LlamaPreTrainedModel):
                 max_length=max_length
             )
     
-        # 这是最关键的修改：在循环中把所有参数都传给 decoder_layer
         for layer_idx, decoder_layer in enumerate(self.layers):
             torch.cuda.nvtx.range_push(f"layer={layer_idx}")
             hidden_states, past_key_value = decoder_layer(
@@ -511,15 +449,13 @@ class LlamaModel(LlamaPreTrainedModel):
         return hidden_states, past_key_value
 
 
-class LlamaForCausalLM(LlamaPreTrainedModel): # 通常CausalLM直接继承PreTrainedModel
+class LlamaForCausalLM(LlamaPreTrainedModel): 
     def __init__(self, name, config, layer_idx=None):
 
-        super().__init__(config) # 继承 PreTrainedModel，它会处理 config 和一些通用初始化
+        super().__init__(config) 
 
-        # LlamaForCausalLM 应该包含一个 LlamaModel 实例作为其骨干
         self.model = LlamaModel(name, config, layer_idx) 
         
-        # 然后添加 CausalLM 独有的 lm_head
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=config.attention_bias, dtype=torch.bfloat16)
         
         self.post_init()
@@ -531,9 +467,8 @@ class LlamaForCausalLM(LlamaPreTrainedModel): # 通常CausalLM直接继承PreTra
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
-        past_key_value: Optional[Cache] = None, # HuggingFace 中通常用 past_key_values (复数)
+        past_key_value: Optional[Cache] = None, 
         use_cache: Optional[bool] = None,
-        # ...可以根据需要添加其他参数
     ) -> Tuple[torch.Tensor, Optional[Cache]]:
         hidden_states, past_key_value = self.model(
             input_ids=input_ids,
@@ -545,6 +480,4 @@ class LlamaForCausalLM(LlamaPreTrainedModel): # 通常CausalLM直接继承PreTra
         
         logits = self.lm_head(hidden_states.to(torch.bfloat16))
         
-        # 注意：标准的CausalLM模型会同时返回logits和past_key_value
-        # 您的代码只返回了 past_key_value，这可能会导致其他问题，建议一起返回
         return past_key_value

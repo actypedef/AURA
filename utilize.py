@@ -250,39 +250,27 @@ def get_c4(nsamples, seed, seqlen, tokenizer):
             inps.append(inp)
             
     if len(inps) < nsamples:
-        print(f"警告: 仅找到 {len(inps)} 个长度大于等于 {seqlen} 的样本。")
+        print(f"warning: only get {len(inps)} samples >= {seqlen} ")
 
     return trainloader, inps
 
 
 def get_humaneval(nsamples, seed, seqlen, tokenizer):
-    """
-    加载 openai_humaneval 数据集。
-    
-    我们使用官方的 'humaneval' Python 包来加载数据，
-    这是最稳定可靠的方式，可以避免 'datasets' 库的内部处理错误。
-    """
     import random
     
     try:
-        # 步骤 1: 使用官方包提供的函数来读取数据
         from human_eval.data import read_problems
-        problems = read_problems()  # 这会返回一个字典 {'task_id': problem_dict}
-        # 步骤 2: 我们只需要问题字典的列表
+        problems = read_problems()  
         dataset = list(problems.values())
     except ImportError:
-        # 如果用户没有安装包，给出清晰的提示
         print("=" * 80)
-        print("错误: 'humaneval' Python 包未安装。")
-        print("请在终端运行 'pip install humaneval' 来安装它。")
+        print("run 'pip install humaneval'")
         print("=" * 80)
         return [], []
     except Exception as e:
-        print(f"使用 'humaneval' 包加载数据失败, 错误: {e}")
+        print(f" 'humaneval' loading error: {e}")
         return [], []
 
-    # 从这里开始，后续逻辑和之前完全一样
-    # 将所有 prompt 拼接成一个长文本
     text_corpus = "\n\n".join([sample['prompt'] for sample in dataset])
     trainenc = tokenizer(text_corpus, return_tensors='pt')
 
@@ -290,9 +278,8 @@ def get_humaneval(nsamples, seed, seqlen, tokenizer):
     trainloader = []
     inps = []
     for _ in range(nsamples):
-        # 防止整个语料库比一个 seqlen 还短
         if trainenc.input_ids.shape[1] <= seqlen:
-            print(f"警告: HumanEval 语料库总长度 ({trainenc.input_ids.shape[1]}) 小于等于 seqlen ({seqlen}).")
+            print(f"warning: HumanEval total length ({trainenc.input_ids.shape[1]}) <= seqlen ({seqlen}).")
             inp = trainenc.input_ids
         else:
             i = random.randint(0, trainenc.input_ids.shape[1] - seqlen - 1)
@@ -305,40 +292,28 @@ def get_humaneval(nsamples, seed, seqlen, tokenizer):
         inps.append(inp)
         
         if trainenc.input_ids.shape[1] <= seqlen:
-            break  # 如果语料库太短，只生成一个样本后就退出
+            break 
 
     return trainloader, inps
 
 @torch.no_grad()
-def search_select_proportions(model, device_, seqlen, reorder_index, hessian):
-    """
-    完全静态地分析模型结构，无需数据和前向传播
-    """
+def search_select_proportions(model, device_, seqlen, reorder_index, select_ratio=0.06):
+
     select_nums = {}
     average_bits = {}
 
     for name, m in model.model.named_modules():
         if 'output' in name:
                 continue
-        # 如果模块是线性层
         if isinstance(m, nn.Linear):
-            # 获取其输入特征维度
             in_features = m.in_features
             
-            # 执行你的计算逻辑
-            select_ratio = 0.04
             select_num = math.ceil(in_features * select_ratio / 64) * 64
             
-            # 我们要统计的是线性层的输入，所以给名字加上后缀 ".input"
-            # 这里的 `name` 已经和您原始代码中的 `name` 完全一样了
             dict_key = name + ".input"
             
             average_bits[dict_key] = 9 * select_ratio + 4.5 * (1.0 - select_ratio)
             select_nums[dict_key] = select_num
 
-    # (可选) 打印一些输出来验证
-    # for i in range(5):
-    #     key_example = list(select_nums.keys())[i]
-    #     print(f"Generated Key Example: {key_example}, Select Num: {select_nums[key_example]}")
 
     return select_nums, average_bits

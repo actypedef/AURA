@@ -240,14 +240,9 @@ __global__ void rmsnorm_x_kernel(
       output_frag_fp4[i / 2 + q_offset + 1].low = Float2E2m1(result_2).storage;
       output_frag_fp4[i / 2 + q_offset + 1].high = Float2E2m1(result_3).storage;
     }
-    // --- 这是处理 KE 数据的线程 (只在 rmsnorm_x_kernel 中有特殊处理) ---
-    // 每个线程写入 16 字节 (sizeof(float4))
     
-    // 首先计算所有 KQ 线程占用的总字节数
     const int kq_region_bytes = kq_thread_count * 8;
-    // 然后计算当前线程在 KE 线程组中的索引
     const int ke_thread_idx = tid - kq_thread_count;
-    // KE 线程的起始地址 = KQ 区域总大小 + 在KE组内的偏移
     const int ke_thread_offset = kq_region_bytes + ke_thread_idx * 16;
     
     float4* q_out_ptr = reinterpret_cast<float4*>(q_out + ke_thread_offset);

@@ -14,28 +14,16 @@ import matplotlib.patches as mpatches
 from quantize import *
 
 def plot_tensor_distribution(tensor, save_path, threshold1=0, threshold2=0):
-    """
-    绘制并保存一个一维张量的分布图。
 
-    参数:
-    tensor (torch.Tensor): 需要绘制的一维张量。
-    save_path (str): 保存图表的路径。
-    """
-    # 确保张量是一维的
     if tensor.dim() != 1:
-        raise ValueError("输入的张量必须是一维的。")
+        raise ValueError("dim != 1")
 
-    # 将张量的值转移到 CPU 并转换为 NumPy 数组，以便 matplotlib 处理
     tensor_values = tensor.cpu().numpy()
     
-    # 创建一个代表 channel 的数组，即 0, 1, 2, ..., 4095
     channels = range(tensor.size(0))
 
-    # 创建一个新的图表
     plt.figure(figsize=(6, 6))
 
-     # 1. 找到前10%的阈值
-    # np.percentile(tensor_values, 90) 计算了第90个百分位数，即90%的数值都低于这个值
     if threshold1 == 0:
         threshold1 = np.percentile(tensor_values, 90)
         threshold2 = np.percentile(tensor_values, 99)
@@ -47,7 +35,6 @@ def plot_tensor_distribution(tensor, save_path, threshold1=0, threshold2=0):
     ]
     plt.bar(channels, tensor_values, color=colors, width=1.0)
 
-    # 添加标题和坐标轴标签
     plt.title("Activation Quantization Error", fontsize=18)
     plt.xlabel("Channel", fontsize=14)
     plt.ylabel("Error", fontsize=14)
@@ -57,18 +44,9 @@ def plot_tensor_distribution(tensor, save_path, threshold1=0, threshold2=0):
     patch_mid = mpatches.Patch(color=color_mid, label=f'90%~99%')
     patch_low = mpatches.Patch(color=color_low, label=f'0%~90%')
     
-    # 增大图例的字体
     plt.legend(handles=[patch_high, patch_mid, patch_low], fontsize=12)
 
-    # # 添加网格线
-    # plt.grid(True)
-
-    # 保存图表到指定路径 [1, 2, 3]
-    # 您可以根据需要更改文件名和格式，例如 'tensor_distribution.pdf'
     plt.savefig(save_path)
-
-    # （可选）如果您想在脚本运行时显示图表，可以取消下面这行代码的注释
-    # plt.show()
 
     print(f"saved: {save_path}")
     return threshold1, threshold2

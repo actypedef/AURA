@@ -36,7 +36,6 @@ int main() {
     C = new ElementC[M * N];
     D = new ElementD[M * N];
     
-    // 创建 scale 数组（每 block_size 个元素对应一个缩放因子）
     int szA = ((M * K + block_size - 1) / block_size);
     ElementA::ScaleFactorType *scaleA = new ElementA::ScaleFactorType[((M * K + block_size - 1) / block_size)];
     int szB = ((N * K + block_size - 1) / block_size);
@@ -50,33 +49,23 @@ int main() {
     cutlass::NumericConverter<ElementB::ScaleFactorType, float, cutlass::FloatRoundStyle::round_to_nearest> converterSFB;
     
     for (int i = 0; i < M * K; ++i) {
-        // 模拟浮点值
         float f = static_cast<float>(std::rand()) / RAND_MAX * 12.0f - 6.0f;
         
-        // 这里可以使用 CUTLASS 的量化转换器（如果你使用完整的库）
-        // 否则使用构造函数转换
         A[i] = converterA(f);
     }
 
     for (int i = 0; i < M * N; ++i) {
-        // 模拟浮点值
         ElementC f = static_cast<ElementC>(12.0 * std::rand() / RAND_MAX - 6.0);
         
-        // 这里可以使用 CUTLASS 的量化转换器（如果你使用完整的库）
-        // 否则使用构造函数转换
         C[i] = f;
     }
     for (int i = 0; i < N * K; ++i) {
-        // 模拟浮点值
         float f = static_cast<float>(std::rand()) / RAND_MAX * 12.0f - 6.0f;
         
-        // 这里可以使用 CUTLASS 的量化转换器（如果你使用完整的库）
-        // 否则使用构造函数转换
         B[i] = converterB(f);
     }
 
 
-    // 随机初始化 scale（每 block 一个）
     for (size_t i = 0; i < szA; ++i) {
         scaleA[i] = converterSFA(static_cast<float>(std::rand()) / RAND_MAX * 255.0f);  // [0.1, 1.0]
     }

@@ -39,6 +39,9 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 cd kernels/
 bash remake.sh
 ```
+
+This might take a few minutes.
+
 ### 2.2 Preprocessing
 Reorder_indices, select_num are needed for quantization:
 ```bash
@@ -57,13 +60,9 @@ Since [FlashInfer](https://github.com/flashinfer-ai/flashinfer/tree/main) is int
 cd third-party/flashinfer/
 python -m pip install -v .
 ```
-DecoderLayer efficiency:
-```bash
-python benchmarks/benchmark_layer_aura.py --model 'llama-3.1-8b' --batch_size 32 --prefill_seq_len 2048
-```
 End-to-end efficiency:
 ```bash
-python benchmarks/benchmark_e2e_aura.py --model 'llama-3.1-8b' --batch_size 8 --prefill_seq_len 1024 --decode_steps 50
+python benchmarks/benchmark_e2e_aura.py --model 'llama-2-7b' --batch_size 8 --prefill_seq_len 1024 --decode_steps 50
 ```
 TensorRT efficiency:
 ```bash

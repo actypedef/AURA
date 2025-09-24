@@ -4,7 +4,6 @@ import numpy as np
 import time
 import traceback
 
-# 1. 定义 Llama 3-8B 结构参数
 BATCH_SIZE = 32
 SEQ_LEN = 2048
 HIDDEN_SIZE = 4096
@@ -15,17 +14,14 @@ FFN_HIDDEN_SIZE = 11008
 GQA_FACTOR = NUM_ATTENTION_HEADS // NUM_KV_HEADS
 NUM_DECODER_LAYERS = 32
 
-# TensorRT 日志记录器
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
 def create_dummy_weights(shape, dtype=np.float16):
-    """创建一个包含随机数据的 trt.Weights 对象"""
     return trt.Weights(np.random.rand(*shape).astype(dtype))
 
 def _create_rope_cache(network, dtype):
-    """预计算 RoPE 的 sin 和 cos 缓存并作为常量添加到网络中"""
     print("Creating RoPE cache for all layers...")
-    theta_base = 500000.0 # Llama 3 使用了更高的 theta base
+    theta_base = 500000.0
     
     theta = 1.0 / (theta_base ** (np.arange(0, HEAD_DIM, 2, dtype=np.float32) / HEAD_DIM))
     position = np.arange(SEQ_LEN, dtype=np.float32)
@@ -45,7 +41,6 @@ def _create_rope_cache(network, dtype):
     return cos_const, sin_const
 
 def add_rope(network, input_tensor, cos_cache, sin_cache):
-    """在网络中添加 RoPE 层"""
     head_dim_half = HEAD_DIM // 2
 
     b, h, s, d = input_tensor.shape
@@ -69,7 +64,6 @@ def add_rope(network, input_tensor, cos_cache, sin_cache):
     return output_tensor
 
 def add_rmsnorm(network, input_tensor, weight_shape, op_name=""):
-    """在网络中添加 RMSNorm 层"""
     epsilon = 1e-5
     dtype = np.float16
 
@@ -100,7 +94,6 @@ def add_rmsnorm(network, input_tensor, weight_shape, op_name=""):
 
 
 def build_llama_prefill_engine():
-    """构建一个使用 FP8 的 Llama 3 完整 32 层 prefill 阶段的 TensorRT 引擎"""
     builder = trt.Builder(TRT_LOGGER)
     network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.STRONGLY_TYPED))
     config = builder.create_builder_config()
@@ -111,7 +104,6 @@ def build_llama_prefill_engine():
     scale_tensor.name = "Global_FP8_Scale"
 
     def add_fp8_linear_op(input_tensor, weight_tensor, op_type, equation=None, transpose_b=False, op_name=""):
-        """通过构建一个 Q-Dq-MatMul 模式来触发 TensorRT 的 FP8 算子融合"""
         input_q = network.add_quantize(input_tensor, scale_tensor, trt.DataType.FP8)
         input_q.name = f"{op_name}_input_quant"
         input_dq = network.add_dequantize(input_q.get_output(0), scale_tensor, trt.float16)
@@ -170,24 +162,19 @@ def build_llama_prefill_engine():
         q_with_rope = add_rope(network, q_reshaped, cos_cache, sin_cache)
         k_with_rope = add_rope(network, k_reshaped, cos_cache, sin_cache)
 
-        # 将当前层的 K 和 V 缓存标记为网络输出
-        # 这就是 KV Cache 的初始化内容
         k_with_rope.name = f"L{i}_present_k_cache"
-        v_reshaped.name = f"L{i}_present_v_cache" # 注意：V 通常在 RoPE 之前被缓存
+        v_reshaped.name = f"L{i}_present_v_cache" 
         network.mark_output(k_with_rope)
         network.mark_output(v_reshaped)
         
         if GQA_FACTOR > 1:
-            # --- FIX: 使用 add_concatenation 替换 add_tile ---
-            # 重复 K 头
             concat_k = network.add_concatenation([k_with_rope] * GQA_FACTOR)
-            concat_k.axis = 1 # 沿头部维度(B,H,S,D)拼接
+            concat_k.axis = 1 
             concat_k.name = f"L{i}_K_Repeat"
             k_repeated = concat_k.get_output(0)
             
-            # 重复 V 头
             concat_v = network.add_concatenation([v_reshaped] * GQA_FACTOR)
-            concat_v.axis = 1 # 沿头部维度(B,H,S,D)拼接
+            concat_v.axis = 1 
             concat_v.name = f"L{i}_V_Repeat"
             v_repeated = concat_v.get_output(0)
         else:
@@ -255,7 +242,6 @@ def build_llama_prefill_engine():
     return plan
 
 def benchmark(engine_plan):
-    """使用构建的引擎进行性能测试"""
     runtime = trt.Runtime(TRT_LOGGER)
     engine = runtime.deserialize_cuda_engine(engine_plan)
     context = engine.create_execution_context()
@@ -276,12 +262,10 @@ def benchmark(engine_plan):
     present_v_caches = []
 
     for i in range(NUM_DECODER_LAYERS):
-        # 创建 K cache 张量并绑定
         k_cache_tensor = torch.empty(k_cache_shape, dtype=torch.float16).cuda()
         present_k_caches.append(k_cache_tensor)
         context.set_tensor_address(f"L{i}_present_k_cache", k_cache_tensor.data_ptr())
 
-        # 创建 V cache 张量并绑定
         v_cache_tensor = torch.empty(v_cache_shape, dtype=torch.float16).cuda()
         present_v_caches.append(v_cache_tensor)
         context.set_tensor_address(f"L{i}_present_v_cache", v_cache_tensor.data_ptr())

@@ -39,9 +39,6 @@ def unpack_i4_and_asym_dequantize(q, scale, zero):
     return q * scale - zero
 
 def matmul_hadagemm(X, dtype):
-    # n = X.shape[-1]
-    # input = hadamard_transform(X.to(dtype).contiguous(), scale=1/math.sqrt(n))
-    # return input.to(X.dtype).view(X.shape) 
     return X
 
 
@@ -181,8 +178,6 @@ class MultiLayerPagedKVCache4Bit(Cache):
         if expected_total_pages <= current_capacity:
             return
         
-        # 抛出更明确的错误
-        # 通过 page_size 和 batch_size 反算出当前支持的最大长度
         current_max_len = (current_capacity // self.batch_size) * self.page_size
         
         raise ValueError(

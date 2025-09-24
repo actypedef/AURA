@@ -5,36 +5,27 @@ import time
 import traceback
 from collections import OrderedDict
 
-# --- 配置参数 ---
 M, N, K = 64, 5120, 5120
 N_ITERATIONS = 6400 * 2048 * 2 // M
 N_WARMUP = 1600 * 2048 * 2 // M
 
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
-# 1. 创建一个自定义的Profiler类
 class SimpleProfiler(trt.IProfiler):
     def __init__(self):
         super().__init__()
-        self.layer_times = OrderedDict() # 使用有序字典保持层的顺序
+        self.layer_times = OrderedDict() 
         self.total_time_ms = 0
 
     def report_layer_time(self, layer_name, ms):
-        """TensorRT在每次推理后会调用这个方法。"""
-        # 注意：对于融合后的层，layer_name可能是 '(Layer1 + Layer2 + ...)' 的形式
-        self.layer_times[layer_name] = ms
-        # 简单累加所有层的时间，这约等于总的GPU执行时间
-        if "(" not in layer_name: # 避免重复计算融合层和其子层的时间
+        if "(" not in layer_name: 
             self.total_time_ms += ms
 
     def print_report(self):
-        """打印格式化的性能报告。"""
         if not self.layer_times:
             print("No layer timing information available. Was a profiled execution run?")
             return
 
-        # 重新计算总时间，以处理融合层的情况
-        # 我们只关心最终的、实际执行的层，所以直接加总字典中的值
         self.total_time_ms = sum(self.layer_times.values())
         
         print("\n--- TensorRT Layer-wise Performance Report ---")
@@ -45,17 +36,14 @@ class SimpleProfiler(trt.IProfiler):
 
         for name, ms in self.layer_times.items():
             percentage = (ms / self.total_time_ms) * 100 if self.total_time_ms > 0 else 0
-            # 缩短过长的层名以便显示
             display_name = (name[:42] + '...') if len(name) > 45 else name
             print(f"{display_name:<45} | {ms:<12.6f} | {percentage:8.2f}%")
         
         print("-" * 60)
-        # 清空记录，以便下次分析
         self.layer_times.clear()
         self.total_time_ms = 0
 
 def build_fp8_engine_the_right_way():
-    """与原版相同，此处省略详细注释"""
     builder = trt.Builder(TRT_LOGGER)
     network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.STRONGLY_TYPED))
     config = builder.create_builder_config()
@@ -107,12 +95,9 @@ def build_fp8_engine_the_right_way():
     return engine
 
 def benchmark_and_profile(engine):
-    """对引擎进行测速，并使用IProfiler分析单次推理的内部耗时"""
-    # 2. 实例化我们的Profiler
     profiler = SimpleProfiler()
     
     context = engine.create_execution_context()
-    # 3. 将Profiler关联到Execution Context
     context.profiler = profiler
 
     input_a_gpu = torch.randn(M, K, dtype=torch.float32).cuda()
@@ -122,7 +107,6 @@ def benchmark_and_profile(engine):
     context.set_tensor_address(input_name, input_a_gpu.data_ptr())
     context.set_tensor_address(output_name, output_gpu.data_ptr())
 
-    # --- 常规基准测试 ---
     print(f"Warming up for {N_WARMUP} iterations...")
     for _ in range(N_WARMUP):
         context.execute_async_v3(stream_handle=torch.cuda.current_stream().cuda_stream)
@@ -147,13 +131,10 @@ def benchmark_and_profile(engine):
     print(f"Throughput: {throughput_tflops:.4f} TFLOPS")
     print("---------------------------------")
 
-    # --- 单次推理以进行性能分析 ---
-    # 我们在所有基准测试运行后，再执行一次，以捕获一个“热”运行的层耗时
     print("\nRunning one final inference to capture layer-wise timings...")
     context.execute_async_v3(stream_handle=torch.cuda.current_stream().cuda_stream)
     torch.cuda.synchronize()
 
-    # 4. 打印Profiler收集到的报告
     profiler.print_report()
 
 

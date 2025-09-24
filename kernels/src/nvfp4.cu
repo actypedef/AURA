@@ -122,9 +122,8 @@ void matmul_host_nvfp4_bf16(
 
     auto status = gemmOp(arguments);
     if (status != cutlass::Status::kSuccess) {
-        // 打印错误信息
         std::cerr << "CUTLASS GEMM operation in matmul_host_nvfp4_bf16 failed with status: "
-                  << cutlass::cutlassGetStatusString(status) // 使用 CUTLASS 提供的函数转换状态为字符串
+                  << cutlass::cutlassGetStatusString(status) 
                   << " (Enum value: " << static_cast<int>(status) << ")"
                   << std::endl;
     }
