@@ -184,7 +184,6 @@ class QLlamaRMSNorm(nn.Module):
         return self
 
 class QLlamaAttention(nn.Module):
-    """Multi-headed attention from 'Attention Is All You Need' paper"""
 
     def __init__(
         self, 
